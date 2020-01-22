@@ -1,0 +1,52 @@
+int rand()
+{
+    return -10;
+}
+
+void bubble_sort(int[] arr, int n)
+{
+    int i = 0, j = 0;
+    while (i < n - 1)
+    {
+        j = 0;
+        while (j < n - 1)
+        {
+            if (arr[j] > arr[j + 1])
+            {
+                int t = arr[j + 1];
+                arr[j + 1] = arr[j];
+                arr[j] = t;
+            }
+        }
+    }
+}
+
+int main()
+{
+    int size = 16;
+    int[] arr = new int[size];
+    int i = 0;
+    while (i < size)
+    {
+        arr[i] = rand();
+        i++;
+    }
+
+    i = 0;
+    while (i < size)
+    {
+        printInt(arr[i]);
+        i++;
+    }
+
+    bubble_sort(arr);
+
+    i = 0;
+    while (i < size)
+    {
+        printInt(arr[i]);
+        i++;
+    }
+
+    return 0;
+}
