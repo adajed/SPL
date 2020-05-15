@@ -81,6 +81,7 @@ instance Show IR where
                 IR_BBinOp op x v1 v2 -> c [show x, "=", show v1, show op, show v2]
                 IR_BUnOp op x v      -> c [show x, "=", show op, show v]
                 IR_IRelOp op x v1 v2 -> c [show x, "=", show v1, show op, show v2]
+                IR_Memory x v        -> c [show x, "=", "*", show v]
                 IR_Param v           -> c ["param", show v]
                 IR_Call x f n        -> c [show x, "=", "call", show f, show n]
                 IR_Return v          -> c ["return", show v]

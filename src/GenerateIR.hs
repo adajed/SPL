@@ -24,11 +24,14 @@ type GenerateIR a = WriterT WState (StateT SState Err) a
 
 type T = Type ()
 
+initialVarEnv :: Map Ident Ident
+initialVarEnv = Map.fromList [(Ident "printInt", Ident "printInt")]
+
 initialSState :: SState
 initialSState = SState { tempCounter  = 0
                        , levelCounter = 0
                        , labelCounter = 0
-                       , varenv = Map.empty }
+                       , varenv = initialVarEnv }
 
 runGenerateIR :: Program T -> Err [IR]
 runGenerateIR program = evalStateT (execWriterT m) initialSState
@@ -62,6 +65,9 @@ declareVar (Ident name) = do
     modifySState (\s -> s { varenv = Map.insert (Ident name) varName (varenv s) } )
     return $ VarN varName
 
+declareFunction :: TopDef T -> GenerateIR ()
+declareFunction (FnDef _ _ name _ _) = void $ declareVar name
+
 getVar :: Ident -> GenerateIR Var
 getVar name = do
     env <- getsSState varenv
@@ -80,7 +86,8 @@ defaultValue (Basic _ (Bool _)) = VBool False
 defaultValue (Basic _ (Void _)) = VVoid
 
 generateIR_Program :: Program T -> GenerateIR ()
-generateIR_Program (Prog t topdefs) =
+generateIR_Program (Prog t topdefs) = do
+    mapM_ declareFunction topdefs
     mapM_ generateIR_TopDef topdefs
 
 generateIR_TopDef :: TopDef T -> GenerateIR ()
@@ -106,10 +113,10 @@ generateIR_Stmt (BStmt _ (Bl _ stmts)) = do
     modifySState (\s -> s { varenv = env } )
 generateIR_Stmt (Decl _ t items) = do
     mapM_ (generateIR_Decl t) items
-generateIR_Stmt (Ass _ (EVar _ name) expr) = do
-    var <- getVar name
-    temp <- liftM VVar $ generateIR_Expr expr
-    emitIR (IR_Ass var temp)
+generateIR_Stmt (Ass _ expr1 expr2) = do
+    var <- generateIR_LExpr expr1
+    value <- liftM VVar $ generateIR_Expr expr2
+    emitIR (IR_Ass var value)
 generateIR_Stmt (Incr _ expr) = do
     value <- liftM VVar $ generateIR_Expr expr
     var <- generateIR_LExpr expr
@@ -173,14 +180,9 @@ generateIR_Expr (EFalse _) = emitIR_ToTemp (\t -> IR_Ass t (VBool False))
 generateIR_Expr (EVar _ name) = do
     var <- getVar name
     emitIR_ToTemp (\t -> IR_Ass t (VVar var))
--- generateIR_Expr (EArrAcc type_ arr expr) = do
---     var <- generateIR_LExpr (EArrAcc type_ arr expr)
---     var <- generateIR_LExpr arr
---     value <- liftM VVar $ generateIR_Expr expr
---     let size = sizeOf arr
---     value <- emitIR_ToTemp (\t -> IR_IBinOp IMul t value (VInt size))
---     value <- emitIR_ToTemp (\t -> IR_IBinOp IAdd t (VVar var) value)
---     emitIR_ToTemp (\t -> IR_Memory t value)
+generateIR_Expr expr@(EArrAcc type_ arr index) = do
+    var <- generateIR_LExpr expr
+    emitIR_ToTemp (\t -> IR_Memory t (VVar var))
 generateIR_Expr (EApp _ (EVar _ fName) args) = do
     let numberOfArgs = length args
     let putParam expr = generateIR_Expr expr >>= emitIR . IR_Param . VVar
@@ -228,11 +230,21 @@ generateIR_Expr (EOr _ expr1 expr2) = do
     v1 <- liftM VVar $ generateIR_Expr expr1
     v2 <- liftM VVar $ generateIR_Expr expr2
     emitIR_ToTemp (\t -> IR_BBinOp BOr t v1 v2)
+generateIR_Expr (EArrNew tt t expr) =
+    generateIR_Expr (EApp tt (EVar tt (Ident "malloc")) [size])
+        where size = EMul tt expr (Times tt) (EInt (Basic () (Int ())) (sizeOf t))
 
 generateIR_LExpr :: Expr T -> GenerateIR Var
 generateIR_LExpr (EVar _ name) = getVar name
+generateIR_LExpr (EArrAcc type_ arr expr) = do
+    var <- generateIR_LExpr arr
+    value <- liftM VVar $ generateIR_Expr expr
+    let size = sizeOf type_
+    value <- liftM VVar $ emitIR_ToTemp (\t -> IR_IBinOp IMul t value (VInt size))
+    value <- emitIR_ToTemp (\t -> IR_IBinOp IAdd t (VVar var) value)
+    return value
 
-sizeOf :: Type a -> Int
+sizeOf :: Type a -> Integer
 sizeOf (Basic _ (Int _)) = 4
 sizeOf (Basic _ (Bool _)) = 1
 sizeOf (Basic _ (Void _)) = 0

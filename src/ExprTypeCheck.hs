@@ -10,23 +10,20 @@ import Control.Monad.Trans.State
 import Data.List as List
 import Data.Map as Map
 
-intT, boolT, voidT :: Type ()
-intT  = (Basic () (Int ()))
-boolT = (Basic () (Bool ()))
-voidT = (Basic () (Void ()))
 
-toVoid :: Functor f => f a -> f (Type ())
+toVoid :: Functor f => f a -> f TType
 toVoid f = fmap (const voidT) f
 
-typeProgram :: Program FData -> Err (Program (Type ()))
+typeProgram :: Program FData -> Err (Program TType)
 typeProgram program = runCheckM (typedExpr_Program program)
 
-typedExpr_Program :: Program FData -> CheckM (Program (Type ()))
+typedExpr_Program :: Program FData -> CheckM (Program TType)
 typedExpr_Program (Prog _ topdefs) = do
+    mapM_ declareFunction topdefs
     topdefsT <- mapM typedExpr_TopDef topdefs
     return (Prog voidT topdefsT)
 
-typedExpr_TopDef :: TopDef FData -> CheckM (TopDef (Type ()))
+typedExpr_TopDef :: TopDef FData -> CheckM (TopDef TType)
 typedExpr_TopDef (FnDef _ t name args (Bl _ stmts)) = do
     let argsT = List.map toVoid args
     env <- gets varenv
@@ -35,11 +32,7 @@ typedExpr_TopDef (FnDef _ t name args (Bl _ stmts)) = do
     modify (\s -> s { varenv = env })
     return (FnDef voidT (toVoid t) name argsT (Bl voidT stmtsT))
 
-declareArg :: Argument FData -> CheckM ()
-declareArg (Arg _ t name) = declareVar name (fmap (const ()) t)
-
-
-typedExpr_Stmt :: Stmt FData -> CheckM (Stmt (Type ()))
+typedExpr_Stmt :: Stmt FData -> CheckM (Stmt TType)
 typedExpr_Stmt (Empty _) = return (Empty voidT)
 typedExpr_Stmt (BStmt _ (Bl _ stmts)) = do
     env <- gets varenv
@@ -76,7 +69,7 @@ typedExpr_Stmt (While _ expr stmt) =
 typedExpr_Stmt (SExp _ expr) =
     liftM (SExp voidT) (typedExpr_Expr expr)
 
-typedExpr_Item :: Type FData -> Item FData -> CheckM (Item (Type ()))
+typedExpr_Item :: Type FData -> Item FData -> CheckM (Item TType)
 typedExpr_Item t (NoInit _ name) = do
     declareVar name (fmap (const ()) t)
     return (NoInit voidT name)
@@ -84,10 +77,10 @@ typedExpr_Item t (Init _ name expr) = do
     declareVar name (fmap (const ()) t)
     liftM (Init voidT name) (typedExpr_Expr expr)
 
-typedExpr_Expr :: Expr FData -> CheckM (Expr (Type ()))
+typedExpr_Expr :: Expr FData -> CheckM (Expr TType)
 typedExpr_Expr expr = liftM fst (typedExpr expr)
 
-typedExpr :: Expr FData -> CheckM (Expr (Type ()), Type ())
+typedExpr :: Expr FData -> CheckM (Expr TType, TType)
 typedExpr (EInt _ n) = return (EInt intT n, intT)
 typedExpr (EFalse _) = return (EFalse boolT, boolT)
 typedExpr (ETrue _) = return (ETrue boolT, boolT)

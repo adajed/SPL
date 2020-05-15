@@ -11,31 +11,58 @@ import ErrM
 
 type FData = ()
 
-type VarEnv = Map Ident (Type ())
+type TType = Type ()
 
-data SState = RState { rettype :: Type ()
+intT, boolT, voidT :: TType
+intT  = Basic () (Int ())
+boolT = Basic () (Bool ())
+voidT = Basic () (Void ())
+
+type VarEnv = Map Ident TType
+
+data SState = RState { rettype :: TType
                      , varenv :: VarEnv }
 
 type CheckM a = StateT SState Err a
 
+initialEnv :: VarEnv
+initialEnv = Map.fromList [(Ident "printInt", Fun () voidT [intT])]
+
 runCheckM :: CheckM a -> Err a
 runCheckM m = evalStateT m initialSState
-    where initialSState = RState { rettype = Basic () (Void ()), varenv = Map.empty }
+    where initialSState = RState { rettype = Basic () (Void ())
+                                 , varenv = initialEnv }
 
-getVariableType :: FData -> Ident -> CheckM (Type ())
+getVariableType :: FData -> Ident -> CheckM TType
 getVariableType pos name = do
     env <- gets varenv
     case env !? name of
       Just a -> return a
       Nothing -> errorMsg pos ("Variable " ++ show name ++ " does not exists")
 
-getReturnType :: CheckM (Type ())
+getReturnType :: CheckM TType
 getReturnType = gets rettype
 
-declareVar :: Ident -> Type () -> CheckM ()
-declareVar name t = do
+declareVar :: Ident -> TType -> CheckM ()
+declareVar name t =
+    modify (\s -> s { varenv = Map.insert name t (varenv s) } )
+
+getArgType :: Argument FData -> TType
+getArgType (Arg _ t _) = t
+
+declareArg :: Argument FData -> CheckM ()
+declareArg (Arg _ t name) = declareVar name t
+
+declareFunction :: TopDef FData -> CheckM ()
+declareFunction (FnDef _ t name args _) =
+    declareVar name (Fun () t (Prelude.map getArgType args))
+
+doWithSavedEnv :: CheckM a -> CheckM a
+doWithSavedEnv m = do
     env <- gets varenv
-    modify (\s -> s { varenv = Map.insert name t env } )
+    r <- m
+    modify (\s -> s { varenv = env })
+    return r
 
 errorMsg :: FData -> String -> CheckM a
 errorMsg () msg = fail msg

@@ -16,9 +16,11 @@ import GenerateIR ( runGenerateIR )
 import ErrM
 import IR
 import BasicBlock
+import StaticCheck
 
 type ParseFun a = [Token] -> Err a
 
+myLLexer :: String -> [Token]
 myLLexer = myLexer
 
 type Verbosity = Int
@@ -36,6 +38,7 @@ compileProgram :: ParseFun (Program ()) -> String -> Err [IR]
 compileProgram parser fileContent = do
     let abstractTree = myLLexer fileContent
     program <- parser abstractTree
+    staticCheck program
     program <- typeProgram program
     runGenerateIR program
 

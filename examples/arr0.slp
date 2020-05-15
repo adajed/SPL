@@ -39,7 +39,7 @@ int main()
         i++;
     }
 
-    bubble_sort(arr);
+    bubble_sort(arr, size);
 
     i = 0;
     while (i < size)
