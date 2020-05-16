@@ -28,18 +28,18 @@ The set of reserved words is the set of terminals appearing in the grammar. Thos
 
 The reserved words used in SPL are the following:
   | ``bool`` | ``else`` | ``false`` | ``if``
-  | ``int`` | ``new`` | ``return`` | ``true``
-  | ``void`` | ``while`` |  | 
+  | ``int`` | ``return`` | ``true`` | ``void``
+  | ``while`` |  |  | 
 
 The symbols used in SPL are the following:
   | ( | ) | , | {
   | } | ; | = | ++
-  | -- | [] | [ | ]
-  | && | || | - | !
-  | ~ | + | * | /
-  | % | << | >> | &
-  | | | ^ | < | <=
-  | > | >= | == | !=
+  | -- | && | || | -
+  | ! | ~ | + | *
+  | / | % | << | >>
+  | & | | | ^ | <
+  | <= | > | >= | ==
+  | != |  |  | 
 
 ===Comments===
 Single-line comments begin with //.Multiple-line comments are  enclosed with /* and */.
@@ -77,11 +77,9 @@ All other symbols are terminals.
   |  |  **|**  | //Ident// ``=`` //Expr// 
   | //[Item]// | -> | //Item// 
   |  |  **|**  | //Item// ``,`` //[Item]// 
-  | //BasicType// | -> | ``int`` 
+  | //Type// | -> | ``int`` 
   |  |  **|**  | ``bool`` 
   |  |  **|**  | ``void`` 
-  | //Type// | -> | //BasicType// 
-  |  |  **|**  | //Type// ``[]`` 
   | //[Type]// | -> | **eps**
   |  |  **|**  | //Type// 
   |  |  **|**  | //Type// ``,`` //[Type]// 
@@ -89,7 +87,6 @@ All other symbols are terminals.
   |  |  **|**  | ``true`` 
   |  |  **|**  | ``false`` 
   |  |  **|**  | //Ident// 
-  |  |  **|**  | //Expr6// ``[`` //Expr// ``]`` 
   |  |  **|**  | //Expr6// ``(`` //[Expr]// ``)`` 
   |  |  **|**  | ``(`` //Expr// ``)`` 
   | //Expr5// | -> | //UnaryOp// //Expr5// 
@@ -103,7 +100,6 @@ All other symbols are terminals.
   | //Expr1// | -> | //Expr2// ``&&`` //Expr1// 
   |  |  **|**  | //Expr2// 
   | //Expr// | -> | //Expr1// ``||`` //Expr// 
-  |  |  **|**  | ``new`` //Type// ``[`` //Expr// ``]`` 
   |  |  **|**  | //Expr1// 
   | //[Expr]// | -> | **eps**
   |  |  **|**  | //Expr// 

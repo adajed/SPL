@@ -1,15 +1,18 @@
 module BasicBlock where
 
+import Data.Map as Map
+
 import AbsSPL
 import IR
 
 data BasicBlock = BB Ident [IR]
 
-splitIntoBasicBlocks :: [IR] -> [BasicBlock]
-splitIntoBasicBlocks code = splitIntoBasicBlocks' code []
-    where splitIntoBasicBlocks' [] bbs = reverse bbs
-          splitIntoBasicBlocks' code bbs = splitIntoBasicBlocks' code' ((BB name bb):bbs)
-            where (name, bb, code') = getBasicBlock code
+splitIntoBasicBlocks :: Map Ident [IR] -> Map Ident [BasicBlock]
+splitIntoBasicBlocks m = Map.map (help []) m
+    where help bbs [] = reverse bbs
+          help bbs xs = help ((BB name bb):bbs) xs'
+            where (name, bb, xs') = getBasicBlock xs
+
 
 getBasicBlock :: [IR] -> (Ident, [IR], [IR])
 getBasicBlock ((IR_Label name):xs) = (name, reverse bb, xs')

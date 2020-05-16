@@ -4,6 +4,8 @@ import System.IO ( stdout, stdin, stderr, hGetContents, hPutStrLn )
 import System.Environment ( getArgs, getProgName )
 import System.Exit ( exitFailure, exitSuccess )
 
+import Data.Map as Map
+
 import LexSPL
 import ParSPL
 import SkelSPL
@@ -34,7 +36,7 @@ printBasicBlock (BB name code) = do
     mapM_ (\ir -> hPutStrLn stdout ("\t" ++ show ir)) code
     hPutStrLn stdout ""
 
-compileProgram :: ParseFun (Program ()) -> String -> Err [IR]
+compileProgram :: ParseFun (Program ()) -> String -> Err (Map Ident [IR])
 compileProgram parser fileContent = do
     let abstractTree = myLLexer fileContent
     program <- parser abstractTree
@@ -52,7 +54,7 @@ run parser filepath = do
           exitFailure
       Ok code -> do
           let bbs = splitIntoBasicBlocks code
-          mapM_ printBasicBlock bbs
+          mapM_ (mapM_ printBasicBlock) (Prelude.map snd (Map.toAscList bbs))
           exitSuccess
 
 main :: IO ()

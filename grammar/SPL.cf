@@ -70,24 +70,30 @@ SExp.      Stmt ::= Expr ";" ;
 
 -- basic types
 
-Int.       BasicType ::= "int" ;
+-- Int.       BasicType ::= "int" ;
 
-Bool.      BasicType ::= "bool" ;
+-- Bool.      BasicType ::= "bool" ;
 
 -- String.    BasicType ::= "string" ;
 
-Void.      BasicType ::= "void" ;
+-- Void.      BasicType ::= "void" ;
 
 -- Char.      BasicType ::= "char" ;
 
 
 -- types
 
-Basic.     Type ::= BasicType ;
+-- Basic.     Type ::= BasicType ;
+
+Int.          Type ::= "int" ;
+
+Bool.         Type ::= "bool" ;
+
+Void.         Type ::= "void" ;
 
 -- Class.     Type ::= Ident ;
 
-Array.     Type ::= Type "[]" ;
+-- Array.     Type ::= Type "[]" ;
 
 internal Fun. Type ::= Type [Type] ;
 
@@ -110,7 +116,7 @@ EVar.       Expr6 ::= Ident ;
 
 -- EField.    Expr6 ::= Expr6 "." Ident ;
 
-EArrAcc.   Expr6 ::= Expr6 "[" Expr "]" ;
+-- EArrAcc.   Expr6 ::= Expr6 "[" Expr "]" ;
 
 EApp.       Expr6 ::= Expr6 "(" [Expr] ")" ;
 
@@ -130,7 +136,7 @@ EOr.        Expr ::= Expr1 "||" Expr ;
 
 -- EObjNew.   Expr ::= "new" Ident ;
 
-EArrNew.   Expr ::= "new" Type "[" Expr "]" ;
+-- EArrNew.   Expr ::= "new" Type "[" Expr "]" ;
 
 
 coercions  Expr 6 ;

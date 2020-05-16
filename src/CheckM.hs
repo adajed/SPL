@@ -14,9 +14,9 @@ type FData = ()
 type TType = Type ()
 
 intT, boolT, voidT :: TType
-intT  = Basic () (Int ())
-boolT = Basic () (Bool ())
-voidT = Basic () (Void ())
+intT = Int ()
+boolT = Bool ()
+voidT = Void ()
 
 type VarEnv = Map Ident TType
 
@@ -30,7 +30,7 @@ initialEnv = Map.fromList [(Ident "printInt", Fun () voidT [intT])]
 
 runCheckM :: CheckM a -> Err a
 runCheckM m = evalStateT m initialSState
-    where initialSState = RState { rettype = Basic () (Void ())
+    where initialSState = RState { rettype = voidT
                                  , varenv = initialEnv }
 
 getVariableType :: FData -> Ident -> CheckM TType

@@ -87,12 +87,12 @@ typedExpr (ETrue _) = return (ETrue boolT, boolT)
 typedExpr (EVar pos name) = do
     t <- getVariableType pos name
     return (EVar t name, t)
-typedExpr (EArrAcc pos aExpr iExpr) = do
-    (iExprT, iT) <- typedExpr iExpr
-    (aExprT, aT) <- typedExpr aExpr
-    case aT of
-      Array _ t -> return (EArrAcc t aExprT iExprT, t)
-      _ -> errorMsg pos "Trying to index not an array"
+-- typedExpr (EArrAcc pos aExpr iExpr) = do
+--     (iExprT, iT) <- typedExpr iExpr
+--     (aExprT, aT) <- typedExpr aExpr
+--     case aT of
+--       Array _ t -> return (EArrAcc t aExprT iExprT, t)
+--       _ -> errorMsg pos "Trying to index not an array"
 typedExpr (EApp pos fExpr exprs) = do
     exprsT <- mapM (\e -> liftM fst (typedExpr e)) exprs
     (fExprT, fT) <- typedExpr fExpr
@@ -127,8 +127,8 @@ typedExpr (EOr pos expr1 expr2) = do
     (exprT2, t2) <- typedExpr expr2
     when (t1 /= t2) (errorMsg pos "Expr types don't match")
     return (EOr t1 exprT1 exprT2, t1)
-typedExpr (EArrNew _ argT expr) = do
-    (exprT, t) <- typedExpr expr
-    when (t /= intT) (errorMsg () "Size is not int")
-    let aT = fmap (const ()) argT
-    return (EArrNew aT (toVoid argT) exprT, aT)
+-- typedExpr (EArrNew _ argT expr) = do
+--     (exprT, t) <- typedExpr expr
+--     when (t /= intT) (errorMsg () "Size is not int")
+--     let aT = fmap (const ()) argT
+--     return (EArrNew aT (toVoid argT) exprT, aT)

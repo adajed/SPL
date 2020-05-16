@@ -124,16 +124,11 @@ instance Print (Item a) where
     Init _ id expr -> prPrec i 0 (concatD [prt 0 id, doc (showString "="), prt 0 expr])
   prtList _ [x] = (concatD [prt 0 x])
   prtList _ (x:xs) = (concatD [prt 0 x, doc (showString ","), prt 0 xs])
-instance Print (BasicType a) where
+instance Print (Type a) where
   prt i e = case e of
     Int _ -> prPrec i 0 (concatD [doc (showString "int")])
     Bool _ -> prPrec i 0 (concatD [doc (showString "bool")])
     Void _ -> prPrec i 0 (concatD [doc (showString "void")])
-
-instance Print (Type a) where
-  prt i e = case e of
-    Basic _ basictype -> prPrec i 0 (concatD [prt 0 basictype])
-    Array _ type_ -> prPrec i 0 (concatD [prt 0 type_, doc (showString "[]")])
     Fun _ type_ types -> prPrec i 0 (concatD [prt 0 type_, prt 0 types])
   prtList _ [] = (concatD [])
   prtList _ [x] = (concatD [prt 0 x])
@@ -145,7 +140,6 @@ instance Print (Expr a) where
     ETrue _ -> prPrec i 6 (concatD [doc (showString "true")])
     EFalse _ -> prPrec i 6 (concatD [doc (showString "false")])
     EVar _ id -> prPrec i 6 (concatD [prt 0 id])
-    EArrAcc _ expr1 expr2 -> prPrec i 6 (concatD [prt 6 expr1, doc (showString "["), prt 0 expr2, doc (showString "]")])
     EApp _ expr exprs -> prPrec i 6 (concatD [prt 6 expr, doc (showString "("), prt 0 exprs, doc (showString ")")])
     EUnaryOp _ unaryop expr -> prPrec i 5 (concatD [prt 0 unaryop, prt 5 expr])
     EMul _ expr1 mulop expr2 -> prPrec i 4 (concatD [prt 4 expr1, prt 0 mulop, prt 5 expr2])
@@ -153,7 +147,6 @@ instance Print (Expr a) where
     ERel _ expr1 relop expr2 -> prPrec i 2 (concatD [prt 2 expr1, prt 0 relop, prt 3 expr2])
     EAnd _ expr1 expr2 -> prPrec i 1 (concatD [prt 2 expr1, doc (showString "&&"), prt 1 expr2])
     EOr _ expr1 expr2 -> prPrec i 0 (concatD [prt 1 expr1, doc (showString "||"), prt 0 expr2])
-    EArrNew _ type_ expr -> prPrec i 0 (concatD [doc (showString "new"), prt 0 type_, doc (showString "["), prt 0 expr, doc (showString "]")])
   prtList _ [] = (concatD [])
   prtList _ [x] = (concatD [prt 0 x])
   prtList _ (x:xs) = (concatD [prt 0 x, doc (showString ","), prt 0 xs])
