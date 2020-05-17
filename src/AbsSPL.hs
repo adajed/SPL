@@ -9,7 +9,7 @@ module AbsSPL where
 
 newtype Ident = Ident String deriving (Eq, Ord, Read)
 instance Show Ident where
-    show (Ident name) = "\"" ++ name ++ "\""
+    show (Ident name) = name
 
 data Program a = Prog a [TopDef a]
   deriving (Eq, Ord, Show, Read)

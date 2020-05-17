@@ -19,6 +19,7 @@ import ErrM
 import IR
 import BasicBlock
 import StaticCheck
+import SSA
 
 type ParseFun a = [Token] -> Err a
 
@@ -35,6 +36,18 @@ printBasicBlock (BB name code) = do
     hPutStrLn stdout (show name)
     mapM_ (\ir -> hPutStrLn stdout ("\t" ++ show ir)) code
     hPutStrLn stdout ""
+
+printBBGraph :: BBGraph -> IO ()
+printBBGraph g = do
+    hPutStrLn stdout "IDS:"
+    mapM_ (\(i, BB name _) -> hPutStrLn stdout ("\t" ++ show i ++ " -> " ++ show name)) (Map.toList (ids g))
+    hPutStrLn stdout "NEXT:"
+    mapM_ (\(n, ns) -> hPutStrLn stdout ("\t" ++ show n ++ " -> " ++ show ns)) (Map.toList (next g))
+    hPutStrLn stdout "PREV:"
+    mapM_ (\(n, ns) -> hPutStrLn stdout ("\t" ++ show n ++ " -> " ++ show ns)) (Map.toList (next g))
+    hPutStrLn stdout "BASIC BLOCKS:"
+    mapM_ printBasicBlock (Map.elems (ids g))
+
 
 compileProgram :: ParseFun (Program ()) -> String -> Err (Map Ident [IR])
 compileProgram parser fileContent = do
@@ -53,8 +66,8 @@ run parser filepath = do
           hPutStrLn stderr errorMsg
           exitFailure
       Ok code -> do
-          let bbs = splitIntoBasicBlocks code
-          mapM_ (mapM_ printBasicBlock) (Prelude.map snd (Map.toAscList bbs))
+          let bbgraphs = splitIntoBasicBlocks code
+          mapM_ printBBGraph (Prelude.map toSSA (Map.elems bbgraphs))
           exitSuccess
 
 main :: IO ()

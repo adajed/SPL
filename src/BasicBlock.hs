@@ -7,17 +7,21 @@ import IR
 
 data BasicBlock = BB Ident [IR]
 
-splitIntoBasicBlocks :: Map Ident [IR] -> Map Ident [BasicBlock]
-splitIntoBasicBlocks m = Map.map (help []) m
-    where help bbs [] = reverse bbs
-          help bbs xs = help ((BB name bb):bbs) xs'
-            where (name, bb, xs') = getBasicBlock xs
+data BBGraph = G { ids :: Map Int BasicBlock
+                 , next :: Map Int [Int]
+                 , prev :: Map Int [Int] }
+
+splitIntoBasicBlocks :: Map Ident [IR] -> Map Ident BBGraph
+splitIntoBasicBlocks m = Map.map (buildBBGraph . (help [] 0)) m
+    where help bbs _ [] = reverse bbs
+          help bbs n xs = help ((BB name bb):bbs) n' xs'
+            where (name, bb, xs', n') = getBasicBlock xs n
 
 
-getBasicBlock :: [IR] -> (Ident, [IR], [IR])
-getBasicBlock ((IR_Label name):xs) = (name, reverse bb, xs')
+getBasicBlock :: [IR] -> Int -> (Ident, [IR], [IR], Int)
+getBasicBlock ((IR_Label name):xs) n = (name, reverse bb, xs', n)
     where (bb, xs') = getBasicBlock' xs []
-getBasicBlock xs = (Ident "temp", reverse bb, xs')
+getBasicBlock xs n = (Ident ("temp" ++ show n), reverse bb, xs', n + 1)
     where (bb, xs') = getBasicBlock' xs []
 
 getBasicBlock' :: [IR] -> [IR] -> ([IR], [IR])
@@ -26,3 +30,32 @@ getBasicBlock' ((IR_CondJump v l):xs) ys = (((IR_CondJump v l):ys), xs)
 getBasicBlock' ((IR_Return v):xs) ys = (((IR_Return v):ys), xs)
 getBasicBlock' ((IR_Label l):xs) ys = (ys, (IR_Label l):xs)
 getBasicBlock' (ir:xs) ys = getBasicBlock' xs (ir:ys)
+
+buildBBGraph :: [BasicBlock] -> BBGraph
+buildBBGraph bbs = G { ids = ids', next = next', prev = prev' }
+    where bbs' = [BB (Ident "__START__") []] ++ bbs ++ [BB (Ident "__END__") []]
+          ids' = Map.fromList (zip [1..] bbs')
+          ids_rev = Map.fromList (zip (Prelude.map (\(BB name _) -> name) bbs') [1..])
+          next' = Map.fromList (zip [1..] (Prelude.map (getNext ids_rev) bbs'))
+          prev' = Map.fromList (zip [1..] (Prelude.map (getPrev ids_rev next') bbs'))
+
+getNext :: Map Ident Int -> BasicBlock -> [Int]
+getNext ids (BB name []) =
+    let n = ids ! name
+     in if n < (size ids) then [n+1] else []
+getNext ids (BB name xs) =
+    let n = ids ! name
+        next = if n < size ids then [n+1] else []
+     in case last xs of
+          IR_Jump label -> [ids ! label]
+          IR_CondJump _ label -> (ids ! label):next
+          IR_Return _ -> [size ids]
+          _ -> next
+
+getPrev :: Map Ident Int -> Map Int [Int] -> BasicBlock -> [Int]
+getPrev ids next (BB name _) =
+    let n = ids ! name
+        next' = Map.toList next
+     in Prelude.map fst (Prelude.filter ((elem n) . snd) next')
+
+

@@ -4,10 +4,11 @@ import Data.List ( intercalate )
 
 import AbsSPL ( Ident )
 
-data Var = VarN Ident | VarT Int
+data Var = VarN Ident | VarT Int | VarC Ident Int
 instance Show Var where
     show (VarN name) = show name
     show (VarT n)    = "t" ++ (show n)
+    show (VarC name n) = show name ++ "__" ++ show n
 
 data Value = VVar Var
            | VInt Integer
@@ -72,6 +73,7 @@ data IR = IR_Label Ident                    -- label
         | IR_Return Value                   -- return value from function
         | IR_Jump Ident
         | IR_CondJump Value Ident
+        | IR_Phi Var [(Int, Value)]       -- phi function (for SSA)
 instance Show IR where
     show ir = case ir of
                 IR_Label name        -> c ["label", show name]
@@ -87,5 +89,6 @@ instance Show IR where
                 IR_Return v          -> c ["return", show v]
                 IR_Jump name         -> c ["jump", show name]
                 IR_CondJump v name   -> c ["if", show v, "jump", show name]
+                IR_Phi x vs          -> c [show x, "=", "phi", show vs]
             where c = intercalate " "
 
