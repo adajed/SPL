@@ -58,6 +58,12 @@ compileProgram parser fileContent = do
     program <- typeProgram program
     runGenerateIR program
 
+optimizeCode :: [IR] -> BBGraph
+optimizeCode =  removePhi .
+                optimize .
+                toSSA .
+                splitIntoBasicBlocks
+
 run :: ParseFun (Program ()) -> String -> IO ()
 run parser filepath = do
     fileContent <- readFile filepath
@@ -67,9 +73,8 @@ run parser filepath = do
           hPutStrLn stderr errorMsg
           exitFailure
       Ok code -> do
-          let bbgraphs = Map.map (toSSA . splitIntoBasicBlocks) code
-          let bbgraphs' = Map.map optimize bbgraphs
-          mapM_ printBBGraph bbgraphs'
+          let bbgraphs = Map.map optimizeCode code
+          mapM_ printBBGraph bbgraphs
           exitSuccess
 
 main :: IO ()
