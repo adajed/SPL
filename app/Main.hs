@@ -38,8 +38,9 @@ printBasicBlock (BB name code) = do
     mapM_ (\ir -> hPutStrLn stdout ("\t" ++ show ir)) code
     hPutStrLn stdout ""
 
-printBBGraph :: BBGraph -> IO ()
-printBBGraph g = do
+printBBGraph :: (Ident, BBGraph) -> IO ()
+printBBGraph (name, g) = do
+    hPutStrLn stdout (show name ++ ":")
     hPutStrLn stdout "IDS:"
     mapM_ (\(i, BB name _) -> hPutStrLn stdout ("\t" ++ show i ++ " -> " ++ show name)) (Map.toList (ids g))
     hPutStrLn stdout "NEXT:"
@@ -50,13 +51,15 @@ printBBGraph g = do
     mapM_ printBasicBlock (Map.elems (ids g))
 
 
-compileProgram :: ParseFun (Program ()) -> String -> Err (Map Ident [IR])
+compileProgram :: ParseFun (Program ()) -> String -> Err (Map Ident BBGraph)
 compileProgram parser fileContent = do
     let abstractTree = myLLexer fileContent
     program <- parser abstractTree
     staticCheck program
     program <- typeProgram program
-    runGenerateIR program
+    code <- runGenerateIR program
+    let bbgraphs = Map.map optimizeCode code
+    return bbgraphs
 
 optimizeCode :: [IR] -> BBGraph
 optimizeCode =  removePhi .
@@ -72,16 +75,15 @@ run parser filepath = do
       Bad errorMsg -> do
           hPutStrLn stderr errorMsg
           exitFailure
-      Ok code -> do
-          let bbgraphs = Map.map optimizeCode code
-          mapM_ printBBGraph bbgraphs
+      Ok bbgraphs -> do
+          mapM_ printBBGraph (Map.assocs bbgraphs)
           exitSuccess
 
 main :: IO ()
 main = do
   args <- getArgs
   case args of
-    [filepath] -> run pProgram filepath
-    _ -> do
-        hPutStrLn stderr "ERROR"
+    [] -> do
+        hPutStrLn stderr "Usage: ./spl source-files"
         exitFailure
+    filepaths -> mapM_ (run pProgram) filepaths
