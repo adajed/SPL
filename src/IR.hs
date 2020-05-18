@@ -16,6 +16,7 @@ data Value = VVar Var
            | VBool Bool
            | VVoid
            | VLabel Ident
+           | VArg Int
     deriving (Eq)
 instance Show Value where
     show (VVar var) = show var
@@ -23,6 +24,7 @@ instance Show Value where
     show (VBool b)  = show b
     show (VVoid) = "void"
     show (VLabel label) = show label
+    show (VArg n) = "arg" ++ show n
 
 data IBinOp = IAdd | ISub | IMul | IDiv | IMod | ILshift | IRshift | IAnd | IOr | IXor
     deriving (Eq)
@@ -82,6 +84,7 @@ data IR = IR_Label Ident                    -- label
         | IR_CondJump Value Ident
         | IR_Phi Var [(Int, Value)]       -- phi function (for SSA)
         | IR_Nop                          -- no op
+        | IR_Argument Var                 -- argument from function
         deriving (Eq)
 instance Show IR where
     show ir = case ir of
@@ -100,5 +103,6 @@ instance Show IR where
                 IR_CondJump v name   -> c ["if", show v, "jump", show name]
                 IR_Phi x vs          -> c [show x, "=", "phi", show vs]
                 IR_Nop               -> c ["nop"]
+                IR_Argument x        -> c ["arg", "(", show x, ")"]
             where c = intercalate " "
 

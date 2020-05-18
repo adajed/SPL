@@ -96,16 +96,18 @@ generateIR_TopDef :: TopDef T -> GenerateIR ()
 generateIR_TopDef (FnDef _ t name args (Bl _ stmts)) = do
     modifySState (\s -> s { currentOutput = [] } )
     env <- getsSState varenv
+    emitIR (IR_Label name)
     mapM_ declareArg args
     modifySState (\s -> s { levelCounter = (levelCounter s) + 1 } )
-    emitIR (IR_Label name)
     mapM_ generateIR_Stmt stmts
     modifySState (\s -> s { levelCounter = (levelCounter s) - 1
                           , varenv = env
                           , output = Map.insert name ((reverse . currentOutput) s) (output s) } )
 
 declareArg :: Argument T -> GenerateIR ()
-declareArg (Arg _ _ name) = void $ declareVar name
+declareArg (Arg _ _ name) = do
+    var <- declareVar name
+    emitIR (IR_Argument var)
 
 generateIR_Stmt :: Stmt T -> GenerateIR ()
 generateIR_Stmt (Empty _) = return ()

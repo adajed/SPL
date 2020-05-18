@@ -45,16 +45,30 @@ addVarIfNew (Just name) = do
         modify (\s -> s { varCounter = Map.insert name 0 map }))
 
 toSSA :: BBGraph -> BBGraph
-toSSA g = Trace.traceShow (Map.keys (varCounter s)) g'
-    where (g', s) = runIdentity (runStateT (graphToSSA g) initialState)
+toSSA g = runIdentity (evalStateT (graphToSSA g) initialState)
 
 graphToSSA :: BBGraph -> SSA BBGraph
 graphToSSA g = do
-    setupAllVars g
-    ids' <- mapM basicBlockToSSA (ids g)
+    let g' = moveArgsToStart g
+    setupAllVars g'
+    ids' <- mapM basicBlockToSSA (ids g')
     let lastN = Map.map snd ids'
-    let g' = g { ids = Map.map fst ids' }
-    return (adjustPhi g' lastN)
+    let g'' = g' { ids = Map.map fst ids' }
+    return (adjustPhi g'' lastN)
+
+moveArgsToStart :: BBGraph -> BBGraph
+moveArgsToStart g = g''
+    where args = concat (Prelude.map getArgsBB (Map.elems (ids g)))
+          newargs = Prelude.map (\(x, n) -> IR_Ass x (VArg n)) (Prelude.zip args [1..])
+          getArgsBB (BB _ xs) = concat (Prelude.map getArgsIR xs)
+          getArgsIR (IR_Argument x) = [x]
+          getArgsIR ir = []
+          isArg (IR_Argument _) = True
+          isArg _ = False
+          removeArgs (BB name xs) = BB name (Prelude.filter (not . isArg) xs)
+          g' = g { ids = Map.map removeArgs (ids g) }
+          insertArgs (BB name xs) = BB name (newargs ++ xs)
+          g'' = g' { ids = Map.adjust insertArgs 1 (ids g') }
 
 setupAllVars :: BBGraph -> SSA ()
 setupAllVars g = mapM_ setupVars (Map.elems (ids g))
@@ -83,18 +97,6 @@ adjustPhi g lastN = g { ids = ids' }
               where prevs = Prelude.map h ((prev g) ! n)
                     h i = (i, VVar (VarC x ((lastN ! i) ! x)))
           p n ir = ir
-
-insertPhi :: BBGraph -> SSA BBGraph
-insertPhi g = do
-    v <- vars
-    let h x = do
-            n <- getNextVarCnt x
-            return (IR_Phi (VarC x n) [])
-    let m (BB name xs) = do
-            xs' <- mapM h v
-            return (BB name (xs' ++ xs))
-    ids' <- mapM m (ids g)
-    return (g { ids = ids'})
 
 basicBlockToSSA :: BasicBlock -> SSA (BasicBlock, Map Ident Int)
 basicBlockToSSA (BB label xs) = do

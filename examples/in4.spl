@@ -1,0 +1,32 @@
+int sum(int s, int e)
+{
+    int sum = 0;
+    int i = s;
+    while (i <= e)
+    {
+        sum = sum + i;
+        i++;
+    }
+
+    return sum;
+}
+
+int sum_squares(int s, int e)
+{
+    int sum = 0;
+    int i = s;
+    while (i <= e)
+    {
+        sum = sum + i * i;
+        i++;
+    }
+
+    return sum;
+}
+
+int main()
+{
+    printInt(sum(100, 1000));
+    printInt(sum_squares(100, 1000));
+    return 0;
+}
