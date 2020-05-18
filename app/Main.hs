@@ -18,6 +18,7 @@ import GenerateIR ( runGenerateIR )
 import ErrM
 import IR
 import BasicBlock
+import Optimizations
 import StaticCheck
 import SSA
 
@@ -66,8 +67,9 @@ run parser filepath = do
           hPutStrLn stderr errorMsg
           exitFailure
       Ok code -> do
-          let bbgraphs = splitIntoBasicBlocks code
-          mapM_ printBBGraph (Prelude.map toSSA (Map.elems bbgraphs))
+          let bbgraphs = Map.map (toSSA . splitIntoBasicBlocks) code
+          let bbgraphs' = Map.map optimize bbgraphs
+          mapM_ printBBGraph bbgraphs'
           exitSuccess
 
 main :: IO ()

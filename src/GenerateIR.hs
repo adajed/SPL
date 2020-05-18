@@ -178,7 +178,7 @@ generateIR_Decl t (Init _ name expr) = do
 
 generateIR_Expr :: Expr T -> GenerateIR Var
 generateIR_Expr (ETypedExpr _ _ expr) = generateIR_Expr expr
-generateIR_Expr (EInt _ n) = emitIR_ToTemp (\t -> IR_Ass t (VInt n))
+generateIR_Expr (EInt _ n) = emitIR_ToTemp (\t -> IR_Ass t (VInt (fromInteger n)))
 generateIR_Expr (ETrue _) = emitIR_ToTemp (\t -> IR_Ass t (VBool True))
 generateIR_Expr (EFalse _) = emitIR_ToTemp (\t -> IR_Ass t (VBool False))
 generateIR_Expr (EVar _ name) = do

@@ -6,15 +6,17 @@ import AbsSPL
 import IR
 
 data BasicBlock = BB Ident [IR]
+    deriving (Eq)
 
 data BBGraph = G { ids :: Map Int BasicBlock
                  , next :: Map Int [Int]
                  , prev :: Map Int [Int] }
+    deriving (Eq)
 
-splitIntoBasicBlocks :: Map Ident [IR] -> Map Ident BBGraph
-splitIntoBasicBlocks m = Map.map (buildBBGraph . (help [] 0)) m
-    where help bbs _ [] = reverse bbs
-          help bbs n xs = help ((BB name bb):bbs) n' xs'
+splitIntoBasicBlocks :: [IR] -> BBGraph
+splitIntoBasicBlocks ir = buildBBGraph (h [] 0 ir)
+    where h bbs _ [] = reverse bbs
+          h bbs n xs = h ((BB name bb):bbs) n' xs'
             where (name, bb, xs', n') = getBasicBlock xs n
 
 

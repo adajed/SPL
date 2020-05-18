@@ -5,16 +5,18 @@ import Data.List ( intercalate )
 import AbsSPL ( Ident )
 
 data Var = VarN Ident | VarT Int | VarC Ident Int
+    deriving (Eq)
 instance Show Var where
     show (VarN name) = show name
     show (VarT n)    = "t" ++ (show n)
     show (VarC name n) = show name ++ "__" ++ show n
 
 data Value = VVar Var
-           | VInt Integer
+           | VInt Int
            | VBool Bool
            | VVoid
            | VLabel Ident
+    deriving (Eq)
 instance Show Value where
     show (VVar var) = show var
     show (VInt n) = show n
@@ -23,6 +25,7 @@ instance Show Value where
     show (VLabel label) = show label
 
 data IBinOp = IAdd | ISub | IMul | IDiv | IMod | ILshift | IRshift | IAnd | IOr | IXor
+    deriving (Eq)
 instance Show IBinOp where
     show IAdd    = "+"
     show ISub    = "-"
@@ -36,21 +39,25 @@ instance Show IBinOp where
     show IXor    = "^"
 
 data IUnOp = INeg | INot
+    deriving (Eq)
 instance Show IUnOp where
     show INeg = "-"
     show INot = "~"
 
 data BBinOp = BAnd | BOr | BXor
+    deriving (Eq)
 instance Show BBinOp where
     show BAnd = "and"
     show BOr  = "or"
     show BXor = "xor"
 
 data BUnOp = BNot
+    deriving (Eq)
 instance Show BUnOp where
     show BNot = "not"
 
 data IRelOp = ILT | ILE | IGT | IGE | IEQ | INEQ
+    deriving (Eq)
 instance Show IRelOp where
     show ILT = "<"
     show ILE = "<="
@@ -74,6 +81,8 @@ data IR = IR_Label Ident                    -- label
         | IR_Jump Ident
         | IR_CondJump Value Ident
         | IR_Phi Var [(Int, Value)]       -- phi function (for SSA)
+        | IR_Nop                          -- no op
+        deriving (Eq)
 instance Show IR where
     show ir = case ir of
                 IR_Label name        -> c ["label", show name]
@@ -90,5 +99,6 @@ instance Show IR where
                 IR_Jump name         -> c ["jump", show name]
                 IR_CondJump v name   -> c ["if", show v, "jump", show name]
                 IR_Phi x vs          -> c [show x, "=", "phi", show vs]
+                IR_Nop               -> c ["nop"]
             where c = intercalate " "
 
