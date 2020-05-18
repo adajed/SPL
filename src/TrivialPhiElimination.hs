@@ -9,6 +9,7 @@ import OptimizationUtils
 trivialPhiElimination :: BBGraph -> BBGraph
 trivialPhiElimination =
         trivialPhiElimination_allTheSame .
+            trivialPhiElimination_loop .
             trivialPhiElimination_zero
 
 trivialPhiElimination_zero :: BBGraph -> BBGraph
@@ -25,6 +26,10 @@ remove g (IR_Phi x []) = mapIR f g
           f ir = ir
 remove g _ = g
 
+trivialPhiElimination_loop :: BBGraph -> BBGraph
+trivialPhiElimination_loop = mapIR f
+    where f (IR_Phi x vs) = IR_Phi x (Prelude.filter ((/= (VVar x)) . snd) vs)
+          f ir = ir
 
 trivialPhiElimination_allTheSame :: BBGraph -> BBGraph
 trivialPhiElimination_allTheSame = mapIR f
