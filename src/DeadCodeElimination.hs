@@ -22,7 +22,8 @@ isUsed g ir =
       IR_IRelOp _ x _ _ -> isVarUsed g x
       IR_IUnOp _ x _ -> isVarUsed g x
       IR_BUnOp _ x _ -> isVarUsed g x
-      IR_Memory x _ -> isVarUsed g x
+      IR_MemRead x _ -> isVarUsed g x
+      IR_Phi x _ -> isVarUsed g x
       ir' -> True
 
 isVarUsed :: BBGraph -> Var -> Bool
@@ -38,7 +39,8 @@ uses v ir =
       IR_IRelOp _ _ v1 v2 -> v1 == v || v2 == v
       IR_IUnOp _ _ v' -> v == v'
       IR_BUnOp _ _ v' -> v == v'
-      IR_Memory _ v' -> v == v'
+      IR_MemRead _ v' -> v == v'
+      IR_MemSave v1 v2 -> v1 == v || v2 == v
       IR_Param v' -> v == v'
       IR_Call _ v' _ -> v == v'
       IR_Return v' -> v == v'

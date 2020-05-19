@@ -20,9 +20,9 @@ assert b msg = when (not b) (errorMsg () msg)
 assertTypesEqual :: TType -> TType -> CheckM ()
 assertTypesEqual t1 t2 = assert (t1 == t2) "Types don't match"
 
--- tryGetArrayType :: TType -> CheckM TType
--- tryGetArrayType (Array _ t) = return t
--- tryGetArrayType _ = errorMsg () "Type is not array"
+tryGetArrayType :: TType -> CheckM TType
+tryGetArrayType (Array _ t) = return t
+tryGetArrayType _ = errorMsg () "Type is not array"
 
 tryGetFunctionType :: TType -> CheckM (TType, [TType])
 tryGetFunctionType (Fun _ retType argTypes) = return (retType, argTypes)
@@ -95,11 +95,11 @@ staticCheck_Expr (EInt _ _) = return intT
 staticCheck_Expr (ETrue _) = return boolT
 staticCheck_Expr (EFalse _) = return boolT
 staticCheck_Expr (EVar _ name) = getVariableType () name
--- staticCheck_Expr (EArrAcc _ arrExpr indexExpr) = do
---     arrType <- staticCheck_Expr arrExpr
---     indexType <- staticCheck_Expr indexExpr
---     assert (indexType == intT) "Index is not int"
---     tryGetArrayType arrType
+staticCheck_Expr (EArrAcc _ arrExpr indexExpr) = do
+    arrType <- staticCheck_Expr arrExpr
+    indexType <- staticCheck_Expr indexExpr
+    assert (indexType == intT) "Index is not int"
+    tryGetArrayType arrType
 staticCheck_Expr (EApp _ funExpr argExprs) = do
     funType <- staticCheck_Expr funExpr
     (retType, argTypes) <- tryGetFunctionType funType
@@ -122,9 +122,9 @@ staticCheck_Expr (EAnd _ e1 e2) =
     staticCheck_BinOp e1 e2 boolT
 staticCheck_Expr (EOr _ e1 e2) =
     staticCheck_BinOp e1 e2 boolT
--- staticCheck_Expr (EArrNew _ t expr) = do
---     assertTypesEqual intT =<< staticCheck_Expr expr
---     return (Array () t)
+staticCheck_Expr (EArrNew _ t expr) = do
+    assertTypesEqual intT =<< staticCheck_Expr expr
+    return (Array () t)
 
 staticCheck_BinOp :: Expr FData -> Expr FData -> TType -> CheckM TType
 staticCheck_BinOp e1 e2 t = do

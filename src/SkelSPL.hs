@@ -47,6 +47,7 @@ transType x = case x of
   Int _ -> failure x
   Bool _ -> failure x
   Void _ -> failure x
+  Array _ type_ -> failure x
   Fun _ type_ types -> failure x
 transExpr :: Show a => Expr a -> Result
 transExpr x = case x of
@@ -55,6 +56,7 @@ transExpr x = case x of
   ETrue _ -> failure x
   EFalse _ -> failure x
   EVar _ ident -> failure x
+  EArrAcc _ expr1 expr2 -> failure x
   EApp _ expr exprs -> failure x
   EUnaryOp _ unaryop expr -> failure x
   EMul _ expr1 mulop expr2 -> failure x
@@ -62,6 +64,7 @@ transExpr x = case x of
   ERel _ expr1 relop expr2 -> failure x
   EAnd _ expr1 expr2 -> failure x
   EOr _ expr1 expr2 -> failure x
+  EArrNew _ type_ expr -> failure x
 transUnaryOp :: Show a => UnaryOp a -> Result
 transUnaryOp x = case x of
   Neg _ -> failure x

@@ -14,7 +14,7 @@ copyPropagation g =
      in (Prelude.foldl (.) id (Prelude.map f ir)) g
 
 findCopyAssignment :: [BasicBlock] -> [IR]
-findCopyAssignment bbs = Prelude.foldl (++) [] (Prelude.map getXs bbs)
+findCopyAssignment bbs = concat (Prelude.map getXs bbs)
     where getXs (BB _ xs) = Prelude.filter isCopyAss xs
 
 isCopyAss :: IR -> Bool

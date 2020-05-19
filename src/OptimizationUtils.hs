@@ -14,7 +14,8 @@ modifyValue f ir =
       IR_IRelOp op x v1 v2 -> IR_IRelOp op x (f v1) (f v2)
       IR_IUnOp op x v -> IR_IUnOp op x (f v)
       IR_BUnOp op x v -> IR_BUnOp op x (f v)
-      IR_Memory x v -> IR_Memory x (f v)
+      IR_MemRead x v -> IR_MemRead x (f v)
+      IR_MemSave v1 v2 -> IR_MemSave (f v1) (f v2)
       IR_Param v -> IR_Param (f v)
       IR_Call x v n -> IR_Call x (f v) n
       IR_Return v -> IR_Return (f v)

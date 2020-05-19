@@ -5,7 +5,7 @@ import Data.List ( intercalate )
 import AbsSPL ( Ident )
 
 data Var = VarN Ident | VarT Int | VarC Ident Int
-    deriving (Eq)
+    deriving (Eq, Ord)
 instance Show Var where
     show (VarN name) = show name
     show (VarT n)    = "t" ++ (show n)
@@ -76,7 +76,8 @@ data IR = IR_Label Ident                    -- label
         | IR_BBinOp BBinOp Var Value Value  -- binary op on bools
         | IR_BUnOp BUnOp Var Value          -- unary op on bools
         | IR_IRelOp IRelOp Var Value Value  -- relation op on intergers
-        | IR_Memory Var Value               -- memory address
+        | IR_MemRead Var Value           -- memory read
+        | IR_MemSave Value Value            -- memory save
         | IR_Param Value                    -- set next param to function
         | IR_Call Var Value Int             -- call function
         | IR_Return Value                   -- return value from function
@@ -95,7 +96,8 @@ instance Show IR where
                 IR_BBinOp op x v1 v2 -> c [show x, "=", show v1, show op, show v2]
                 IR_BUnOp op x v      -> c [show x, "=", show op, show v]
                 IR_IRelOp op x v1 v2 -> c [show x, "=", show v1, show op, show v2]
-                IR_Memory x v        -> c [show x, "=", "*", show v]
+                IR_MemRead x v       -> c [show x, "=", "*", show v]
+                IR_MemSave d s       -> c ["*", show d, "=", show s]
                 IR_Param v           -> c ["param", show v]
                 IR_Call x f n        -> c [show x, "=", "call", show f, show n]
                 IR_Return v          -> c ["return", show v]

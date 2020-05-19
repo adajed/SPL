@@ -181,7 +181,8 @@ removePhi g = Prelude.foldl f g' phis
 
 insertPhiEquivalence :: Var -> [(Int, Value)] -> BBGraph -> BBGraph
 insertPhiEquivalence x vs g = Prelude.foldl f g vs
-    where f g (i, v) = insertAtTheEnd i (IR_Ass x v) g
+    where f g (i, v) = if v == VVar x then g
+                                      else insertAtTheEnd i (IR_Ass x v) g
 
 insertAtTheEnd :: Int -> IR -> BBGraph -> BBGraph
 insertAtTheEnd i ir g = g { ids = Map.adjust f i (ids g) }

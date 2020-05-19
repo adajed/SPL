@@ -9,7 +9,7 @@ import RemoveNop
 import TrivialPhiElimination
 
 optimize :: BBGraph -> BBGraph
-optimize g = iterateUntilFixpoint opts g
+optimize g = head (iterateUntilFixpoint opts g)
     where opts = foldl (.) id fs
           fs = [ constantFolding
                , copyPropagation
@@ -18,7 +18,8 @@ optimize g = iterateUntilFixpoint opts g
                , removeNop]
 
 
-iterateUntilFixpoint :: (BBGraph -> BBGraph) -> BBGraph -> BBGraph
-iterateUntilFixpoint f g =
-    let newg = f g
-     in if g == newg then g else iterateUntilFixpoint f newg
+iterateUntilFixpoint :: (BBGraph -> BBGraph) -> BBGraph -> [BBGraph]
+iterateUntilFixpoint f g = help [g] g
+    where help xs x =
+            let newx = f x
+              in if x == newx then xs else help (newx:xs) newx

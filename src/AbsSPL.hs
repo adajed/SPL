@@ -71,7 +71,12 @@ instance Functor Item where
     fmap f x = case x of
         NoInit a ident -> NoInit (f a) ident
         Init a ident expr -> Init (f a) ident (fmap f expr)
-data Type a = Int a | Bool a | Void a | Fun a (Type a) [Type a]
+data Type a
+    = Int a
+    | Bool a
+    | Void a
+    | Array a (Type a)
+    | Fun a (Type a) [Type a]
   deriving (Eq, Ord, Show, Read)
 
 instance Functor Type where
@@ -79,6 +84,7 @@ instance Functor Type where
         Int a -> Int (f a)
         Bool a -> Bool (f a)
         Void a -> Void (f a)
+        Array a type_ -> Array (f a) (fmap f type_)
         Fun a type_ types -> Fun (f a) (fmap f type_) (map (fmap f) types)
 data Expr a
     = ETypedExpr a (Type a) (Expr a)
@@ -86,6 +92,7 @@ data Expr a
     | ETrue a
     | EFalse a
     | EVar a Ident
+    | EArrAcc a (Expr a) (Expr a)
     | EApp a (Expr a) [Expr a]
     | EUnaryOp a (UnaryOp a) (Expr a)
     | EMul a (Expr a) (MulOp a) (Expr a)
@@ -93,6 +100,7 @@ data Expr a
     | ERel a (Expr a) (RelOp a) (Expr a)
     | EAnd a (Expr a) (Expr a)
     | EOr a (Expr a) (Expr a)
+    | EArrNew a (Type a) (Expr a)
   deriving (Eq, Ord, Show, Read)
 
 instance Functor Expr where
@@ -102,6 +110,7 @@ instance Functor Expr where
         ETrue a -> ETrue (f a)
         EFalse a -> EFalse (f a)
         EVar a ident -> EVar (f a) ident
+        EArrAcc a expr1 expr2 -> EArrAcc (f a) (fmap f expr1) (fmap f expr2)
         EApp a expr exprs -> EApp (f a) (fmap f expr) (map (fmap f) exprs)
         EUnaryOp a unaryop expr -> EUnaryOp (f a) (fmap f unaryop) (fmap f expr)
         EMul a expr1 mulop expr2 -> EMul (f a) (fmap f expr1) (fmap f mulop) (fmap f expr2)
@@ -109,6 +118,7 @@ instance Functor Expr where
         ERel a expr1 relop expr2 -> ERel (f a) (fmap f expr1) (fmap f relop) (fmap f expr2)
         EAnd a expr1 expr2 -> EAnd (f a) (fmap f expr1) (fmap f expr2)
         EOr a expr1 expr2 -> EOr (f a) (fmap f expr1) (fmap f expr2)
+        EArrNew a type_ expr -> EArrNew (f a) (fmap f type_) (fmap f expr)
 data UnaryOp a = Neg a | Not a | BitNot a
   deriving (Eq, Ord, Show, Read)
 
