@@ -6,7 +6,7 @@ Prog.      Program ::= [TopDef] ;
 
 FnDef.     TopDef ::= Type Ident "(" [Argument] ")" Block ;
 
--- ClDef.     TopDef ::= "class" Ident ClassExtend "{" [ClassArgument] "}" ;
+ClDef.     TopDef ::= "class" Ident "{" [ClassArgument] "}" ;
 
 separator nonempty TopDef "" ;
 
@@ -14,13 +14,13 @@ Arg.       Argument ::= Type Ident;
 
 separator  Argument "," ;
 
--- Field.     ClassArgument ::= Type [Ident] ";" ;
+Field.     ClassArgument ::= Type [Ident] ";" ;
 
--- separator nonempty Ident "," ;
+separator nonempty Ident "," ;
 
 -- Method.    ClassArgument ::= Type Ident "(" [Argument] ")" Block ;
 
--- separator ClassArgument "" ;
+separator ClassArgument "" ;
 
 -- NoExtend.  ClassExtend ::= ;
 
@@ -68,36 +68,19 @@ SExp.      Stmt ::= Expr ";" ;
 
 -- Types ---------------------------------------------------
 
--- basic types
+Int.            Type ::= "int" ;
 
--- Int.       BasicType ::= "int" ;
+Bool.           Type ::= "bool" ;
 
--- Bool.      BasicType ::= "bool" ;
+Void.           Type ::= "void" ;
 
--- String.    BasicType ::= "string" ;
+Class.          Type ::= Ident ;
 
--- Void.      BasicType ::= "void" ;
+Array.          Type ::= Type "[]" ;
 
--- Char.      BasicType ::= "char" ;
+internal Fun.   Type ::= Type [Type] ;
 
-
--- types
-
--- Basic.     Type ::= BasicType ;
-
-Int.          Type ::= "int" ;
-
-Bool.         Type ::= "bool" ;
-
-Void.         Type ::= "void" ;
-
--- Class.     Type ::= Ident ;
-
-Array.     Type ::= Type "[]" ;
-
-internal Fun. Type ::= Type [Type] ;
-
--- internal Null. Type ::= ;
+internal Null.  Type ::= ;
 
 separator Type "," ;
 
@@ -105,6 +88,8 @@ separator Type "," ;
 -- Expressions ---------------------------------------------
 
 internal ETypedExpr. Expr6 ::= Type Expr6 ;
+
+ENull.      Expr6 ::= "null" ;
 
 EInt.       Expr6 ::= Integer ;
 
@@ -114,7 +99,7 @@ EFalse.     Expr6 ::= "false" ;
 
 EVar.       Expr6 ::= Ident ;
 
--- EField.    Expr6 ::= Expr6 "." Ident ;
+EField.    Expr6 ::= Expr6 "." Ident ;
 
 EArrAcc.   Expr6 ::= Expr6 "[" Expr "]" ;
 
@@ -134,7 +119,7 @@ EAnd.       Expr1 ::= Expr2 "&&" Expr1 ;
 
 EOr.        Expr ::= Expr1 "||" Expr ;
 
--- EObjNew.   Expr ::= "new" Ident ;
+EObjNew.   Expr ::= "new" Ident ;
 
 EArrNew.   Expr ::= "new" Type "[" Expr "]" ;
 

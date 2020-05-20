@@ -17,18 +17,27 @@ data Program a = Prog a [TopDef a]
 instance Functor Program where
     fmap f x = case x of
         Prog a topdefs -> Prog (f a) (map (fmap f) topdefs)
-data TopDef a = FnDef a (Type a) Ident [Argument a] (Block a)
+data TopDef a
+    = FnDef a (Type a) Ident [Argument a] (Block a)
+    | ClDef a Ident [ClassArgument a]
   deriving (Eq, Ord, Show, Read)
 
 instance Functor TopDef where
     fmap f x = case x of
         FnDef a type_ ident arguments block -> FnDef (f a) (fmap f type_) ident (map (fmap f) arguments) (fmap f block)
+        ClDef a ident classarguments -> ClDef (f a) ident (map (fmap f) classarguments)
 data Argument a = Arg a (Type a) Ident
   deriving (Eq, Ord, Show, Read)
 
 instance Functor Argument where
     fmap f x = case x of
         Arg a type_ ident -> Arg (f a) (fmap f type_) ident
+data ClassArgument a = Field a (Type a) [Ident]
+  deriving (Eq, Ord, Show, Read)
+
+instance Functor ClassArgument where
+    fmap f x = case x of
+        Field a type_ idents -> Field (f a) (fmap f type_) idents
 data Block a = Bl a [Stmt a]
   deriving (Eq, Ord, Show, Read)
 
@@ -75,8 +84,10 @@ data Type a
     = Int a
     | Bool a
     | Void a
+    | Class a Ident
     | Array a (Type a)
     | Fun a (Type a) [Type a]
+    | Null a
   deriving (Eq, Ord, Show, Read)
 
 instance Functor Type where
@@ -84,14 +95,18 @@ instance Functor Type where
         Int a -> Int (f a)
         Bool a -> Bool (f a)
         Void a -> Void (f a)
+        Class a ident -> Class (f a) ident
         Array a type_ -> Array (f a) (fmap f type_)
         Fun a type_ types -> Fun (f a) (fmap f type_) (map (fmap f) types)
+        Null a -> Null (f a)
 data Expr a
     = ETypedExpr a (Type a) (Expr a)
+    | ENull a
     | EInt a Integer
     | ETrue a
     | EFalse a
     | EVar a Ident
+    | EField a (Expr a) Ident
     | EArrAcc a (Expr a) (Expr a)
     | EApp a (Expr a) [Expr a]
     | EUnaryOp a (UnaryOp a) (Expr a)
@@ -100,16 +115,19 @@ data Expr a
     | ERel a (Expr a) (RelOp a) (Expr a)
     | EAnd a (Expr a) (Expr a)
     | EOr a (Expr a) (Expr a)
+    | EObjNew a Ident
     | EArrNew a (Type a) (Expr a)
   deriving (Eq, Ord, Show, Read)
 
 instance Functor Expr where
     fmap f x = case x of
         ETypedExpr a type_ expr -> ETypedExpr (f a) (fmap f type_) (fmap f expr)
+        ENull a -> ENull (f a)
         EInt a integer -> EInt (f a) integer
         ETrue a -> ETrue (f a)
         EFalse a -> EFalse (f a)
         EVar a ident -> EVar (f a) ident
+        EField a expr ident -> EField (f a) (fmap f expr) ident
         EArrAcc a expr1 expr2 -> EArrAcc (f a) (fmap f expr1) (fmap f expr2)
         EApp a expr exprs -> EApp (f a) (fmap f expr) (map (fmap f) exprs)
         EUnaryOp a unaryop expr -> EUnaryOp (f a) (fmap f unaryop) (fmap f expr)
@@ -118,6 +136,7 @@ instance Functor Expr where
         ERel a expr1 relop expr2 -> ERel (f a) (fmap f expr1) (fmap f relop) (fmap f expr2)
         EAnd a expr1 expr2 -> EAnd (f a) (fmap f expr1) (fmap f expr2)
         EOr a expr1 expr2 -> EOr (f a) (fmap f expr1) (fmap f expr2)
+        EObjNew a ident -> EObjNew (f a) ident
         EArrNew a type_ expr -> EArrNew (f a) (fmap f type_) (fmap f expr)
 data UnaryOp a = Neg a | Not a | BitNot a
   deriving (Eq, Ord, Show, Read)

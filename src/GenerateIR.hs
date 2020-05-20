@@ -12,9 +12,13 @@ import Control.Monad.Trans ( lift )
 import Control.Monad.Trans.State
 import Control.Monad.Trans.Writer
 
+type Offset = Int
+
 data SState = SState { tempCounter :: Int
                      , levelCounter :: Int
                      , labelCounter :: Int
+                     , fieldOffset :: Map Ident (Map Ident Offset)
+                     , classSize :: Map Ident Int
                      , varenv :: Map Ident Ident
                      , output :: Map Ident [IR]
                      , currentOutput :: [IR]
@@ -24,6 +28,15 @@ type GenerateIR a = StateT SState Err a
 
 type T = Type ()
 
+sizeOf :: Type a -> Int
+sizeOf (Int _) = 4
+sizeOf (Bool _) = 1
+sizeOf (Void _) = 0
+sizeOf (Array _ _) = 8
+sizeOf (Fun _ _ _) = 8
+sizeOf (Class _ _) = 8
+sizeOf (Null _) = 8
+
 initialVarEnv :: Map Ident Ident
 initialVarEnv = Map.fromList [(Ident "printInt", Ident "printInt")]
 
@@ -31,6 +44,7 @@ initialSState :: SState
 initialSState = SState { tempCounter  = 0
                        , levelCounter = 0
                        , labelCounter = 0
+                       , fieldOffset = Map.empty
                        , varenv = initialVarEnv
                        , output = Map.empty
                        , currentOutput = [] }
@@ -67,8 +81,20 @@ declareVar (Ident name) = do
     modifySState (\s -> s { varenv = Map.insert (Ident name) varName (varenv s) } )
     return $ VarN varName
 
-declareFunction :: TopDef T -> GenerateIR ()
-declareFunction (FnDef _ _ name _ _) = void $ declareVar name
+declareTopDef :: TopDef T -> GenerateIR ()
+declareTopDef (FnDef _ _ name _ _) = void $ declareVar name
+declareTopDef (ClDef _ name args) =
+    let (size, offsets) = generateOffsets args
+        insertOffsets = Map.insert name (Map.fromList offsets)
+        insertSize = Map.insert name size
+     in modify (\s -> s { fieldOffset = insertOffsets (fieldOffset s)
+                        , classSize = insertSize (classSize s) })
+
+generateOffsets :: [ClassArgument T] -> (Int, [(Ident, Offset)])
+generateOffsets args = Prelude.foldl h (0, []) args
+    where h acc (Field _ t xs) = Prelude.foldl (h' (sizeOf t)) acc xs
+          h' size (n, ys) name = (n + size, ((name, n):ys))
+
 
 getVar :: Ident -> GenerateIR Var
 getVar name = do
@@ -89,7 +115,7 @@ defaultValue (Void _) = VVoid
 
 generateIR_Program :: Program T -> GenerateIR ()
 generateIR_Program (Prog t topdefs) = do
-    mapM_ declareFunction topdefs
+    mapM_ declareTopDef topdefs
     mapM_ generateIR_TopDef topdefs
 
 generateIR_TopDef :: TopDef T -> GenerateIR ()
@@ -103,6 +129,7 @@ generateIR_TopDef (FnDef _ t name args (Bl _ stmts)) = do
     modifySState (\s -> s { levelCounter = (levelCounter s) - 1
                           , varenv = env
                           , output = Map.insert name ((reverse . currentOutput) s) (output s) } )
+generateIR_TopDef (ClDef _ _ _) = return ()
 
 declareArg :: Argument T -> GenerateIR ()
 declareArg (Arg _ _ name) = do
@@ -184,9 +211,18 @@ generateIR_Expr (ETypedExpr _ _ expr) = generateIR_Expr expr
 generateIR_Expr (EInt _ n) = emitIR_ToTemp (\t -> IR_Ass t (VInt (fromInteger n)))
 generateIR_Expr (ETrue _) = emitIR_ToTemp (\t -> IR_Ass t (VBool True))
 generateIR_Expr (EFalse _) = emitIR_ToTemp (\t -> IR_Ass t (VBool False))
+generateIR_Expr (ENull _) = emitIR_ToTemp (\t -> IR_Ass t (VInt 0))
 generateIR_Expr (EVar _ name) = do
     var <- getVar name
     emitIR_ToTemp (\t -> IR_Ass t (VVar var))
+generateIR_Expr (EField _ expr field) =
+    case exprType expr of
+      Class _ cls -> do
+            x <- liftM VVar $ generateIR_Expr expr
+            offset <- liftM ((!field) . (!cls)) $ gets fieldOffset
+            y <- emitIR_ToTemp (\t -> IR_IBinOp IAdd t x (VInt offset))
+            emitIR_ToTemp (\t -> IR_MemRead t (VVar y))
+      _ -> fail "error"
 generateIR_Expr expr@(EArrAcc type_ arr index) = do
     arrV <- generateIR_Expr arr
     ind <- liftM VVar $ generateIR_Expr index
@@ -241,6 +277,10 @@ generateIR_Expr (EOr _ expr1 expr2) = do
     v1 <- liftM VVar $ generateIR_Expr expr1
     v2 <- liftM VVar $ generateIR_Expr expr2
     emitIR_ToTemp (\t -> IR_BBinOp BOr t v1 v2)
+generateIR_Expr (EObjNew t cls) = do
+    size <- liftM (!cls) $ gets classSize
+    generateIR_Expr (EApp t (EVar t (Ident "malloc")) [arg1])
+        where arg1 = EInt (Int ()) size
 generateIR_Expr (EArrNew tt t expr) =
     generateIR_Expr (EApp tt (EVar tt (Ident "malloc")) [size])
         where size = EMul tt expr (Times tt) (EInt (Int ()) (fromIntegral (sizeOf t)))
@@ -256,10 +296,30 @@ generateIR_LExpr (EArrAcc type_ arr expr) = do
     v' <- liftM VVar $ emitIR_ToTemp (\t -> IR_IBinOp IMul t ind (VInt size))
     loc <- emitIR_ToTemp (\t -> IR_IBinOp IAdd t (VVar x) v')
     return (\v -> emitIR (IR_MemSave (VVar loc) v))
+generateIR_LExpr (EField _ expr field) =
+    case exprType expr of
+      Class _ cls -> do
+            x <- liftM VVar $ generateIR_Expr expr
+            offset <- liftM ((!field) . (!cls)) $ gets fieldOffset
+            y <- emitIR_ToTemp (\t -> IR_IBinOp IAdd t x (VInt offset))
+            return (\v -> emitIR (IR_MemSave (VVar y) v))
+      _ -> fail "error"
 
-sizeOf :: Type a -> Int
-sizeOf (Int _) = 4
-sizeOf (Bool _) = 1
-sizeOf (Void _) = 0
-sizeOf (Array _ _) = 8
-sizeOf (Fun _ _ _) = 8
+
+exprType :: Expr T -> T
+exprType (ENull t) = t
+exprType (EInt t _) = t
+exprType (ETrue t) = t
+exprType (EFalse t) = t
+exprType (EVar t _) = t
+exprType (EField t _ _) = t
+exprType (EArrAcc t _ _) = t
+exprType (EApp t _ _) = t
+exprType (EUnaryOp t _ _) = t
+exprType (EMul t _ _ _) = t
+exprType (EAdd t _ _ _) = t
+exprType (ERel t _ _ _) = t
+exprType (EAnd t _ _) = t
+exprType (EOr t _ _) = t
+exprType (EObjNew t _) = t
+exprType (EArrNew t _ _) = t
