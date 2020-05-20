@@ -23,5 +23,20 @@ modifyValue f ir =
       IR_Phi x vs -> IR_Phi x (Prelude.map (\(n,v) -> (n, f v)) vs)
       ir' -> ir'
 
+takeVar :: IR -> Maybe Var
+takeVar (IR_Ass x _) = Just x
+takeVar (IR_IBinOp _ x _ _) = Just x
+takeVar (IR_BBinOp _ x _ _) = Just x
+takeVar (IR_IRelOp _ x _ _) = Just x
+takeVar (IR_IUnOp _ x _) = Just x
+takeVar (IR_BUnOp _ x _) = Just x
+takeVar (IR_MemRead x _) = Just x
+takeVar (IR_Call x _ _) = Just x
+takeVar (IR_Phi x _) = Just x
+takeVar _ = Nothing
+
 mapIR :: (IR -> IR) -> BBGraph -> BBGraph
 mapIR f g = g { ids = Map.map (\(BB name xs) -> BB name (Prelude.map f xs)) (ids g) }
+
+liftBB :: ([IR] -> [IR]) -> BasicBlock -> BasicBlock
+liftBB f (BB name xs) = BB name (f xs)

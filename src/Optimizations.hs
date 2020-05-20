@@ -5,13 +5,15 @@ import BasicBlock
 import ConstantFolding
 import CopyPropagation
 import DeadCodeElimination
+import LocalCommonSubexpressionElimination
 import RemoveNop
 import TrivialPhiElimination
 
 optimize :: BBGraph -> BBGraph
 optimize g = head (iterateUntilFixpoint opts g)
     where opts = foldl (.) id fs
-          fs = [ constantFolding
+          fs = [ localCommonSubexpressionElimination
+               , constantFolding
                , copyPropagation
                , trivialPhiElimination
                , deadCodeElimination
