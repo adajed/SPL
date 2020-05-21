@@ -46,12 +46,7 @@ allPairs xs = h xs []
           h (y:ys) acc = h ys ((zip (repeat y) ys) ++ acc)
 
 isCommonSubExpr :: (IR, IR) -> Bool
-isCommonSubExpr (IR_IBinOp op _ v1 v2, IR_IBinOp op' _ v1' v2') =
+isCommonSubExpr (IR_BinOp op _ v1 v2, IR_BinOp op' _ v1' v2') =
     op == op' && v1 == v1' && v2 == v2'
-isCommonSubExpr (IR_BBinOp op _ v1 v2, IR_BBinOp op' _ v1' v2') =
-    op == op' && v1 == v1' && v2 == v2'
-isCommonSubExpr (IR_IRelOp op _ v1 v2, IR_IRelOp op' _ v1' v2') =
-    op == op' && v1 == v1' && v2 == v2'
-isCommonSubExpr (IR_IUnOp op _ v, IR_IUnOp op' _ v') = op == op' && v == v'
-isCommonSubExpr (IR_BUnOp op _ v, IR_BUnOp op' _ v') = op == op' && v == v'
+isCommonSubExpr (IR_UnOp op _ v, IR_UnOp op' _ v') = op == op' && v == v'
 isCommonSubExpr _ = False
