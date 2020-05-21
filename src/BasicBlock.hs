@@ -27,6 +27,7 @@ getBasicBlock xs n = (Ident ("temp" ++ show n), reverse bb, xs', n + 1)
     where (bb, xs') = getBasicBlock' xs []
 
 getBasicBlock' :: [IR] -> [IR] -> ([IR], [IR])
+getBasicBlock' [] ys = (ys, [])
 getBasicBlock' (x@(IR_Jump _):xs) ys = ((x:ys), xs)
 getBasicBlock' (x@(IR_CondJump _ _ _ _):xs) ys = ((x:ys), xs)
 getBasicBlock' (x@(IR_Return _):xs) ys = ((x:ys), xs)
