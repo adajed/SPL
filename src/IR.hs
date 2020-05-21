@@ -26,7 +26,7 @@ instance Show Value where
     show (VLabel label) = show label
     show (VArg n) = "arg" ++ show n
 
-data IBinOp = IAdd | ISub | IMul | IDiv | IMod | ILshift | IRshift | IAnd | IOr | IXor
+data IBinOp = IAdd | ISub | IMul | IDiv | IMod | ILshift | IRshift | IBitAnd | IBitOr | IBitXor
     deriving (Eq)
 instance Show IBinOp where
     show IAdd    = "+"
@@ -36,9 +36,9 @@ instance Show IBinOp where
     show IMod    = "%"
     show ILshift = "<<"
     show IRshift = ">>"
-    show IAnd    = "&"
-    show IOr     = "|"
-    show IXor    = "^"
+    show IBitAnd = "&"
+    show IBitOr  = "|"
+    show IBitXor = "^"
 
 data IUnOp = INeg | INot
     deriving (Eq)
@@ -58,53 +58,59 @@ data BUnOp = BNot
 instance Show BUnOp where
     show BNot = "not"
 
-data IRelOp = ILT | ILE | IGT | IGE | IEQ | INEQ
+data RelOp = LTH | LEQ | GTH | GEQ | EQU | NEQ
     deriving (Eq)
-instance Show IRelOp where
-    show ILT = "<"
-    show ILE = "<="
-    show IGT = ">"
-    show IGE = ">="
-    show IEQ = "=="
-    show INEQ = "!="
+instance Show RelOp where
+    show LTH = "<"
+    show LEQ = "<="
+    show GTH = ">"
+    show GEQ = ">="
+    show EQU = "=="
+    show NEQ = "!="
 
+data BinOp = BOpInt IBinOp | BOpBool BBinOp | BOpRel RelOp
+    deriving (Eq)
+instance Show BinOp where
+    show (BOpInt op) = show op
+    show (BOpBool op) = show op
+    show (BOpRel op) = show op
+
+data UnOp = UOpInt IUnOp | UOpBool BUnOp
+    deriving (Eq)
+instance Show UnOp where
+    show (UOpInt op) = show op
+    show (UOpBool op) = show op
 
 data IR = IR_Label Ident                    -- label
         | IR_Ass Var Value                  -- assignment
-        | IR_IBinOp IBinOp Var Value Value  -- binary op on integers
-        | IR_IUnOp IUnOp Var Value          -- unary op on intergers
-        | IR_BBinOp BBinOp Var Value Value  -- binary op on bools
-        | IR_BUnOp BUnOp Var Value          -- unary op on bools
-        | IR_IRelOp IRelOp Var Value Value  -- relation op on intergers
+        | IR_BinOp BinOp Var Value Value    -- binary op
+        | IR_UnOp UnOp Var Value          -- unary op
         | IR_MemRead Var Value           -- memory read
         | IR_MemSave Value Value            -- memory save
         | IR_Param Value                    -- set next param to function
         | IR_Call Var Value Int             -- call function
         | IR_Return Value                   -- return value from function
         | IR_Jump Ident
-        | IR_CondJump Value Ident
+        | IR_CondJump Value RelOp Value Ident
         | IR_Phi Var [(Int, Value)]       -- phi function (for SSA)
         | IR_Nop                          -- no op
         | IR_Argument Var                 -- argument from function
         deriving (Eq)
 instance Show IR where
     show ir = case ir of
-                IR_Label name        -> c ["label", show name]
-                IR_Ass x v           -> c [show x, "=", show v]
-                IR_IBinOp op x v1 v2 -> c [show x, "=", show v1, show op, show v2]
-                IR_IUnOp op x v      -> c [show x, "=", show op, show v]
-                IR_BBinOp op x v1 v2 -> c [show x, "=", show v1, show op, show v2]
-                IR_BUnOp op x v      -> c [show x, "=", show op, show v]
-                IR_IRelOp op x v1 v2 -> c [show x, "=", show v1, show op, show v2]
-                IR_MemRead x v       -> c [show x, "=", "*", show v]
-                IR_MemSave d s       -> c ["*", show d, "=", show s]
-                IR_Param v           -> c ["param", show v]
-                IR_Call x f n        -> c [show x, "=", "call", show f, show n]
-                IR_Return v          -> c ["return", show v]
-                IR_Jump name         -> c ["jump", show name]
-                IR_CondJump v name   -> c ["if", show v, "jump", show name]
-                IR_Phi x vs          -> c [show x, "=", "phi", show vs]
-                IR_Nop               -> c ["nop"]
-                IR_Argument x        -> c ["arg", "(", show x, ")"]
+                IR_Label name           -> c ["label", show name]
+                IR_Ass x v              -> c [show x, "=", show v]
+                IR_BinOp op x v1 v2     -> c [show x, "=", show v1, show op, show v2]
+                IR_UnOp op x v          -> c [show x, "=", show op, show v]
+                IR_MemRead x v          -> c [show x, "=", "*", show v]
+                IR_MemSave d s          -> c ["*", show d, "=", show s]
+                IR_Param v              -> c ["param", show v]
+                IR_Call x f n           -> c [show x, "=", "call", show f, show n]
+                IR_Return v             -> c ["return", show v]
+                IR_Jump l               -> c ["jump", show l]
+                IR_CondJump v1 op v2 l  -> c ["if", show v1, show op, show v2, "jump", show l]
+                IR_Phi x vs              -> c [show x, "=", "phi", show vs]
+                IR_Nop                  -> c ["nop"]
+                IR_Argument x           -> c ["arg", "(", show x, ")"]
             where c = intercalate " "
 

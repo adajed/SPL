@@ -9,27 +9,21 @@ modifyValue :: (Value -> Value) -> IR -> IR
 modifyValue f ir =
     case ir of
       IR_Ass x v -> IR_Ass x (f v)
-      IR_IBinOp op x v1 v2 -> IR_IBinOp op x (f v1) (f v2)
-      IR_BBinOp op x v1 v2 -> IR_BBinOp op x (f v1) (f v2)
-      IR_IRelOp op x v1 v2 -> IR_IRelOp op x (f v1) (f v2)
-      IR_IUnOp op x v -> IR_IUnOp op x (f v)
-      IR_BUnOp op x v -> IR_BUnOp op x (f v)
+      IR_BinOp op x v1 v2 -> IR_BinOp op x (f v1) (f v2)
+      IR_UnOp op x v -> IR_UnOp op x (f v)
       IR_MemRead x v -> IR_MemRead x (f v)
       IR_MemSave v1 v2 -> IR_MemSave (f v1) (f v2)
       IR_Param v -> IR_Param (f v)
       IR_Call x v n -> IR_Call x (f v) n
       IR_Return v -> IR_Return (f v)
-      IR_CondJump v l -> IR_CondJump (f v) l
+      IR_CondJump v1 op v2 l -> IR_CondJump (f v1) op (f v2) l
       IR_Phi x vs -> IR_Phi x (Prelude.map (\(n,v) -> (n, f v)) vs)
       ir' -> ir'
 
 takeVar :: IR -> Maybe Var
 takeVar (IR_Ass x _) = Just x
-takeVar (IR_IBinOp _ x _ _) = Just x
-takeVar (IR_BBinOp _ x _ _) = Just x
-takeVar (IR_IRelOp _ x _ _) = Just x
-takeVar (IR_IUnOp _ x _) = Just x
-takeVar (IR_BUnOp _ x _) = Just x
+takeVar (IR_BinOp _ x _ _) = Just x
+takeVar (IR_UnOp _ x _) = Just x
 takeVar (IR_MemRead x _) = Just x
 takeVar (IR_Call x _ _) = Just x
 takeVar (IR_Phi x _) = Just x

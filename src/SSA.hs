@@ -84,11 +84,8 @@ getVar ir =
         h (VarT _) = Nothing
      in case ir of
           IR_Ass v _        -> h v
-          IR_IBinOp _ v _ _ -> h v
-          IR_IUnOp _ v _    -> h v
-          IR_BBinOp _ v _ _ -> h v
-          IR_BUnOp _ v _    -> h v
-          IR_IRelOp _ v _ _ -> h v
+          IR_BinOp _ v _ _ -> h v
+          IR_UnOp _ v _    -> h v
           IR_Call v _ _     -> h v
           _ -> Nothing
 
@@ -120,35 +117,22 @@ irToSSA (IR_Ass x v) = do
     v' <- valueToSSA v
     x' <- varToSSA x
     return (IR_Ass x' v')
-irToSSA (IR_IBinOp op x v1 v2) = do
+irToSSA (IR_BinOp op x v1 v2) = do
     v1' <- valueToSSA v1
     v2' <- valueToSSA v2
     x' <- varToSSA x
-    return (IR_IBinOp op x v1 v2)
-irToSSA (IR_IUnOp op x v) = do
+    return (IR_BinOp op x v1 v2)
+irToSSA (IR_UnOp op x v) = do
     v' <- valueToSSA v
     x' <- varToSSA x
-    return (IR_IUnOp op x' v')
-irToSSA (IR_BBinOp op x v1 v2) = do
-    v1' <- valueToSSA v1
-    v2' <- valueToSSA v2
-    x' <- varToSSA x
-    return (IR_BBinOp op x v1 v2)
-irToSSA (IR_BUnOp op x v) = do
-    v' <- valueToSSA v
-    x' <- varToSSA x
-    return (IR_BUnOp op x' v')
-irToSSA (IR_IRelOp op x v1 v2) = do
-    v1' <- valueToSSA v1
-    v2' <- valueToSSA v2
-    x' <- varToSSA x
-    return (IR_IRelOp op x v1 v2)
+    return (IR_UnOp op x' v')
 irToSSA (IR_Param v) = do
     v' <- valueToSSA v
     return (IR_Param v')
-irToSSA (IR_CondJump v label) = do
-    v' <- valueToSSA v
-    return (IR_CondJump v' label)
+irToSSA (IR_CondJump v1 op v2 label) = do
+    v1' <- valueToSSA v1
+    v2' <- valueToSSA v2
+    return (IR_CondJump v1' op v2' label)
 irToSSA (IR_Return v) = do
     v' <- valueToSSA v
     return (IR_Return v')
@@ -189,7 +173,7 @@ insertAtTheEnd i ir g = g { ids = Map.adjust f i (ids g) }
     where f (BB name []) = BB name [ir]
           f (BB name xs) = case last xs of
                              IR_Jump l -> BB name ((init xs) ++ [ir, IR_Jump l])
-                             IR_CondJump v l -> BB name ((init xs) ++ [ir, IR_CondJump v l])
+                             IR_CondJump v1 op v2 l -> BB name ((init xs) ++ [ir, IR_CondJump v1 op v2 l])
                              _ -> BB name (xs ++ [ir])
 
 

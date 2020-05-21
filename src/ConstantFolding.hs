@@ -11,18 +11,19 @@ constantFolding :: BBGraph -> BBGraph
 constantFolding = mapIR constantFold
 
 constantFold :: IR -> IR
-constantFold (IR_IBinOp op x (VInt n1) (VInt n2)) =
+constantFold (IR_BinOp (BOpInt op) x (VInt n1) (VInt n2)) =
     IR_Ass x (VInt (calcIBinOp op n1 n2))
-constantFold (IR_BBinOp op x (VBool b1) (VBool b2)) =
+constantFold (IR_BinOp (BOpBool op) x (VBool b1) (VBool b2)) =
     IR_Ass x (VBool (calcBBinOp op b1 b2))
-constantFold (IR_IRelOp op x (VInt n1) (VInt n2)) =
+constantFold (IR_BinOp (BOpRel op) x (VInt n1) (VInt n2)) =
     IR_Ass x (VBool (calcIRelOp op n1 n2))
-constantFold (IR_IUnOp op x (VInt n)) =
+constantFold (IR_UnOp (UOpInt op) x (VInt n)) =
     IR_Ass x (VInt (calcIUnOp op n))
-constantFold (IR_BUnOp op x (VBool b)) =
+constantFold (IR_UnOp (UOpBool op) x (VBool b)) =
     IR_Ass x (VBool (calcBUnOp op b))
-constantFold (IR_CondJump (VBool True) label) = IR_Jump label
-constantFold (IR_CondJump (VBool False) _) = IR_Nop
+constantFold ir@(IR_CondJump v1 EQU v2 label) = if v1 == v2 then IR_Jump label else ir
+constantFold (IR_CondJump (VInt n1) op (VInt n2) label) =
+    if calcIRelOp op n1 n2 then IR_Jump label else IR_Nop
 constantFold ir = ir
 
 calcIBinOp :: IBinOp -> Int -> Int -> Int
@@ -33,9 +34,9 @@ calcIBinOp IDiv = quot
 calcIBinOp IMod = mod
 calcIBinOp ILshift = Bits.shiftL
 calcIBinOp IRshift = Bits.shiftR
-calcIBinOp IAnd = (.&.)
-calcIBinOp IOr = (.|.)
-calcIBinOp IXor = Bits.xor
+calcIBinOp IBitAnd = (.&.)
+calcIBinOp IBitOr = (.|.)
+calcIBinOp IBitXor = Bits.xor
 
 calcIUnOp :: IUnOp -> Int -> Int
 calcIUnOp INeg = negate
@@ -49,10 +50,10 @@ calcBBinOp BXor = (/=)
 calcBUnOp :: BUnOp -> Bool -> Bool
 calcBUnOp BNot = not
 
-calcIRelOp :: IRelOp -> Int -> Int -> Bool
-calcIRelOp ILT = (<)
-calcIRelOp ILE = (<=)
-calcIRelOp IGT = (>)
-calcIRelOp IGE = (>=)
-calcIRelOp IEQ = (==)
-calcIRelOp INEQ = (/=)
+calcIRelOp :: RelOp -> Int -> Int -> Bool
+calcIRelOp LTH = (<)
+calcIRelOp LEQ = (<=)
+calcIRelOp GTH = (>)
+calcIRelOp GEQ = (>=)
+calcIRelOp EQU = (==)
+calcIRelOp NEQ = (/=)

@@ -27,10 +27,10 @@ getBasicBlock xs n = (Ident ("temp" ++ show n), reverse bb, xs', n + 1)
     where (bb, xs') = getBasicBlock' xs []
 
 getBasicBlock' :: [IR] -> [IR] -> ([IR], [IR])
-getBasicBlock' ((IR_Jump l):xs) ys = (((IR_Jump l):ys), xs)
-getBasicBlock' ((IR_CondJump v l):xs) ys = (((IR_CondJump v l):ys), xs)
-getBasicBlock' ((IR_Return v):xs) ys = (((IR_Return v):ys), xs)
-getBasicBlock' ((IR_Label l):xs) ys = (ys, (IR_Label l):xs)
+getBasicBlock' (x@(IR_Jump _):xs) ys = ((x:ys), xs)
+getBasicBlock' (x@(IR_CondJump _ _ _ _):xs) ys = ((x:ys), xs)
+getBasicBlock' (x@(IR_Return _):xs) ys = ((x:ys), xs)
+getBasicBlock' (x@(IR_Label _):xs) ys = (ys, x:xs)
 getBasicBlock' (ir:xs) ys = getBasicBlock' xs (ir:ys)
 
 buildBBGraph :: [BasicBlock] -> BBGraph
@@ -50,7 +50,7 @@ getNext ids (BB name xs) =
         next = if n < size ids then [n+1] else []
      in case last xs of
           IR_Jump label -> [ids ! label]
-          IR_CondJump _ label -> (ids ! label):next
+          IR_CondJump _ _ _ label -> (ids ! label):next
           IR_Return _ -> [size ids]
           _ -> next
 
