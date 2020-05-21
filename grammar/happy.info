@@ -11,7 +11,7 @@ rule 43 is unused
 -----------------------------------------------------------------------------
 Grammar
 -----------------------------------------------------------------------------
-	%start_pProgram_internal -> Program                (0)
+	%start_pProgram -> Program                         (0)
 	Ident -> L_ident                                   (1)
 	Integer -> L_integ                                 (2)
 	Program -> ListTopDef                              (3)
@@ -149,13 +149,13 @@ Terminals
 	'||'           { PT _ (TS _ 43) }
 	'}'            { PT _ (TS _ 44) }
 	'~'            { PT _ (TS _ 45) }
-	L_ident        { PT _ (TV _) }
-	L_integ        { PT _ (TI _) }
+	L_ident        { PT _ (TV $$) }
+	L_integ        { PT _ (TI $$) }
 
 -----------------------------------------------------------------------------
 Non-terminals
 -----------------------------------------------------------------------------
-	%start_pProgram_internal rule  0
+	%start_pProgram rule  0
 	Ident           rule  1
 	Integer         rule  2
 	Program         rule  3
@@ -257,7 +257,7 @@ State 3
 
 State 4
 
-	%start_pProgram_internal -> Program .               (rule 0)
+	%start_pProgram -> Program .                        (rule 0)
 
 	%eof           accept
 

@@ -19,7 +19,7 @@ typeProgram program = runCheckM (typedExpr_Program program)
 
 typedExpr_Program :: Program FData -> CheckM (Program TType)
 typedExpr_Program (Prog _ topdefs) = do
-    mapM_ declareFunction topdefs
+    mapM_ declareTopDef topdefs
     topdefsT <- mapM typedExpr_TopDef topdefs
     return (Prog voidT topdefsT)
 
@@ -31,6 +31,7 @@ typedExpr_TopDef (FnDef _ t name args (Bl _ stmts)) = do
     stmtsT <- mapM typedExpr_Stmt stmts
     modify (\s -> s { varenv = env })
     return (FnDef voidT (toVoid t) name argsT (Bl voidT stmtsT))
+typedExpr_TopDef t@(ClDef _ _ _) = return (toVoid t)
 
 typedExpr_Stmt :: Stmt FData -> CheckM (Stmt TType)
 typedExpr_Stmt (Empty _) = return (Empty voidT)
@@ -84,9 +85,17 @@ typedExpr :: Expr FData -> CheckM (Expr TType, TType)
 typedExpr (EInt _ n) = return (EInt intT n, intT)
 typedExpr (EFalse _) = return (EFalse boolT, boolT)
 typedExpr (ETrue _) = return (ETrue boolT, boolT)
+typedExpr (ENull _) = return (ENull nullT, nullT)
 typedExpr (EVar pos name) = do
     t <- getVariableType pos name
     return (EVar t name, t)
+typedExpr (EField pos expr field) = do
+    (exprT, t) <- typedExpr expr
+    case t of
+      Class _ cls -> do
+          tt <- liftM ((! field) . (! cls)) $ gets fields
+          return (EField tt exprT field, tt)
+      _ -> errorMsg pos "Not a class"
 typedExpr (EArrAcc pos aExpr iExpr) = do
     (iExprT, iT) <- typedExpr iExpr
     (aExprT, aT) <- typedExpr aExpr
@@ -127,6 +136,8 @@ typedExpr (EOr pos expr1 expr2) = do
     (exprT2, t2) <- typedExpr expr2
     when (t1 /= t2) (errorMsg pos "Expr types don't match")
     return (EOr t1 exprT1 exprT2, t1)
+typedExpr (EObjNew _ cls) = return (EObjNew t cls, t)
+    where t = Class () cls
 typedExpr (EArrNew _ argT expr) = do
     (exprT, t) <- typedExpr expr
     when (t /= intT) (errorMsg () "Size is not int")

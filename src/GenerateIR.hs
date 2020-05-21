@@ -44,6 +44,7 @@ initialSState :: SState
 initialSState = SState { tempCounter  = 0
                        , levelCounter = 0
                        , labelCounter = 0
+                       , classSize = Map.empty
                        , fieldOffset = Map.empty
                        , varenv = initialVarEnv
                        , output = Map.empty
@@ -279,8 +280,8 @@ generateIR_Expr (EOr _ expr1 expr2) = do
     emitIR_ToTemp (\t -> IR_BBinOp BOr t v1 v2)
 generateIR_Expr (EObjNew t cls) = do
     size <- liftM (!cls) $ gets classSize
+    let arg1 = EInt (Int ()) (toInteger size)
     generateIR_Expr (EApp t (EVar t (Ident "malloc")) [arg1])
-        where arg1 = EInt (Int ()) size
 generateIR_Expr (EArrNew tt t expr) =
     generateIR_Expr (EApp tt (EVar tt (Ident "malloc")) [size])
         where size = EMul tt expr (Times tt) (EInt (Int ()) (fromIntegral (sizeOf t)))

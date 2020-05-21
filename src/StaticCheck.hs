@@ -7,18 +7,23 @@ import ErrM
 import Control.Monad
 import Control.Monad.State
 
+import Data.Map as Map
+
 staticCheck :: Program FData -> Err ()
 staticCheck (Prog _ topdefs) = runCheckM m
     where m = do
-              mapM_ declareFunction topdefs
+              mapM_ declareTopDef topdefs
               mapM_ staticCheck_TopDef topdefs
 
 
 assert :: Bool -> String -> CheckM ()
-assert b msg = when (not b) (errorMsg () msg)
+assert b msg = unless b (errorMsg () msg)
 
 assertTypesEqual :: TType -> TType -> CheckM ()
-assertTypesEqual t1 t2 = assert (t1 == t2) "Types don't match"
+assertTypesEqual (Class _ _) (Null _) = return ()
+assertTypesEqual (Null _) (Class _ _) = return ()
+assertTypesEqual t1 t2 = assert (t1 == t2) msg
+    where msg = "Types don't match: " ++ show t1 ++ " != " ++ show t2
 
 tryGetArrayType :: TType -> CheckM TType
 tryGetArrayType (Array _ t) = return t
@@ -28,6 +33,9 @@ tryGetFunctionType :: TType -> CheckM (TType, [TType])
 tryGetFunctionType (Fun _ retType argTypes) = return (retType, argTypes)
 tryGetFunctionType  _ = errorMsg () "Type is not function"
 
+tryGetClassName :: TType -> CheckM Ident
+tryGetClassName (Class _ cls) = return cls
+tryGetClassName _ = errorMsg () "Type is not a class"
 
 unaryOpType :: UnaryOp a -> TType
 unaryOpType (Neg _)    = intT
@@ -49,6 +57,7 @@ staticCheck_TopDef (FnDef _ t name args block) = doWithSavedEnv m
             modify (\s -> s { rettype = t })
             mapM_ declareArg args
             staticCheck_Stmt (BStmt () block)
+staticCheck_TopDef (ClDef _ _ _) = return ()
 
 staticCheck_Stmt :: Stmt FData -> CheckM ()
 staticCheck_Stmt (Empty _) = return ()
@@ -94,7 +103,14 @@ staticCheck_Expr :: Expr FData -> CheckM TType
 staticCheck_Expr (EInt _ _) = return intT
 staticCheck_Expr (ETrue _) = return boolT
 staticCheck_Expr (EFalse _) = return boolT
+staticCheck_Expr (ENull _) = return nullT
 staticCheck_Expr (EVar _ name) = getVariableType () name
+staticCheck_Expr (EField _ expr field) = do
+    cls <- tryGetClassName =<< staticCheck_Expr expr
+    classes <- gets fields
+    assert (Map.member cls classes) "Class doesn't exist"
+    assert (Map.member field (classes ! cls)) "Field doesn't exist"
+    return ((classes ! cls) ! field)
 staticCheck_Expr (EArrAcc _ arrExpr indexExpr) = do
     arrType <- staticCheck_Expr arrExpr
     indexType <- staticCheck_Expr indexExpr
@@ -122,6 +138,10 @@ staticCheck_Expr (EAnd _ e1 e2) =
     staticCheck_BinOp e1 e2 boolT
 staticCheck_Expr (EOr _ e1 e2) =
     staticCheck_BinOp e1 e2 boolT
+staticCheck_Expr (EObjNew _ cls) = do
+    classes <- gets fields
+    assert (Map.member cls classes) "Class doesn't exist"
+    return (Class () cls)
 staticCheck_Expr (EArrNew _ t expr) = do
     assertTypesEqual intT =<< staticCheck_Expr expr
     return (Array () t)

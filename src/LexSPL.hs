@@ -94,7 +94,7 @@ alex_actions = array (0 :: Int, 12)
   , (0,alex_action_5)
   ]
 
-{-# LINE 39 "src/LexSPL.x" #-}
+{-# LINE 38 "src/LexSPL.x" #-}
 
 
 tok :: (Posn -> String -> Token) -> (Posn -> String -> Token)
@@ -118,12 +118,10 @@ data Token =
  | Err Posn
   deriving (Eq,Show,Ord)
 
-printPosn :: Posn -> String
-printPosn (Pn _ l c) = "line " ++ show l ++ ", column " ++ show c
-
 tokenPos :: [Token] -> String
-tokenPos (t:_) = printPosn (tokenPosn t)
-tokenPos [] = "end of file"
+tokenPos (PT (Pn _ l _) _ :_) = "line " ++ show l
+tokenPos (Err (Pn _ l _) :_) = "line " ++ show l
+tokenPos _ = "end of file"
 
 tokenPosn :: Token -> Posn
 tokenPosn (PT p _) = p
@@ -146,7 +144,6 @@ prToken t = case t of
   PT _ (TV s)   -> s
   PT _ (TD s)   -> s
   PT _ (TC s)   -> s
-  Err _         -> "#error"
 
 
 data BTree = N | B String Tok BTree BTree deriving (Show)

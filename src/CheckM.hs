@@ -13,15 +13,17 @@ type FData = ()
 
 type TType = Type ()
 
-intT, boolT, voidT :: TType
+intT, boolT, voidT, nullT :: TType
 intT = Int ()
 boolT = Bool ()
 voidT = Void ()
+nullT = Null ()
 
 type VarEnv = Map Ident TType
 
-data SState = RState { rettype :: TType
-                     , varenv :: VarEnv }
+data SState = SState { rettype :: TType
+                     , varenv :: VarEnv
+                     , fields :: Map Ident (Map Ident TType) }
 
 type CheckM a = StateT SState Err a
 
@@ -30,8 +32,9 @@ initialEnv = Map.fromList [(Ident "printInt", Fun () voidT [intT])]
 
 runCheckM :: CheckM a -> Err a
 runCheckM m = evalStateT m initialSState
-    where initialSState = RState { rettype = voidT
-                                 , varenv = initialEnv }
+    where initialSState = SState { rettype = voidT
+                                 , varenv = initialEnv
+                                 , fields = Map.empty }
 
 getVariableType :: FData -> Ident -> CheckM TType
 getVariableType pos name = do
@@ -53,9 +56,14 @@ getArgType (Arg _ t _) = t
 declareArg :: Argument FData -> CheckM ()
 declareArg (Arg _ t name) = declareVar name t
 
-declareFunction :: TopDef FData -> CheckM ()
-declareFunction (FnDef _ t name args _) =
+declareTopDef :: TopDef FData -> CheckM ()
+declareTopDef (FnDef _ t name args _) =
     declareVar name (Fun () t (Prelude.map getArgType args))
+declareTopDef (ClDef _ cls args) = do
+    let addField t m x = Map.insert x t m
+    let addArg m (Field _ t xs) = Prelude.foldl (addField t) m xs
+    let fieldMap = Prelude.foldl addArg Map.empty args
+    modify (\s -> s { fields = Map.insert cls fieldMap (fields s) })
 
 doWithSavedEnv :: CheckM a -> CheckM a
 doWithSavedEnv m = do
