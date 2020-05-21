@@ -2,6 +2,7 @@ module Optimizations where
 
 import BasicBlock
 
+import ArithmeticOptimizations
 import ConstantFolding
 import CopyPropagation
 import DeadCodeElimination
@@ -14,6 +15,7 @@ optimize g = head (iterateUntilFixpoint opts g)
     where opts = foldl (.) id fs
           fs = [ localCommonSubexpressionElimination
                , constantFolding
+               , arithmeticOptimizations
                , copyPropagation
                , trivialPhiElimination
                , deadCodeElimination
