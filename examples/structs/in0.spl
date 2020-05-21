@@ -1,0 +1,61 @@
+class ListInt {
+    int elem;
+    ListInt next;
+}
+
+int head(ListInt l)
+{
+    if (l == null)
+        return -1;
+    return l.elem;
+}
+
+ListInt tail(ListInt l)
+{
+    if (l == null)
+        return null;
+    return l.next;
+}
+
+ListInt reverse(ListInt l)
+{
+    ListInt acc = null;
+
+    while (l != null)
+    {
+        ListInt temp = new ListInt;
+        temp.elem = l.elem;
+        temp.next = acc;
+        acc = temp;
+
+        l = l.next;
+    }
+
+    return acc;
+}
+
+void printListInt(ListInt l)
+{
+    while (l != null)
+    {
+        printInt(l.elem);
+        l = l.next;
+    }
+}
+
+int main()
+{
+    ListInt l = new ListInt;
+    l.elem = 1;
+    l.next = new ListInt;
+    l.next.elem = 2;
+    l.next.next = null;
+
+    printListInt(l);
+
+    ListInt l2 = reverse(l);
+
+    printListInt(l2);
+
+    return 0;
+}
