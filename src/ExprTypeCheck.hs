@@ -124,18 +124,15 @@ typedExpr (EAdd pos expr1 op expr2) = do
 typedExpr (ERel pos expr1 op expr2) = do
     (exprT1, t1) <- typedExpr expr1
     (exprT2, t2) <- typedExpr expr2
-    when (t1 /= t2) (errorMsg pos "Expr types don't match")
-    return (ERel t1 exprT1 (toVoid op) exprT2, t1)
+    return (ERel boolT exprT1 (toVoid op) exprT2, t1)
 typedExpr (EAnd pos expr1 expr2) = do
     (exprT1, t1) <- typedExpr expr1
     (exprT2, t2) <- typedExpr expr2
-    when (t1 /= t2) (errorMsg pos "Expr types don't match")
-    return (EAnd t1 exprT1 exprT2, t1)
+    return (EAnd boolT exprT1 exprT2, t1)
 typedExpr (EOr pos expr1 expr2) = do
     (exprT1, t1) <- typedExpr expr1
     (exprT2, t2) <- typedExpr expr2
-    when (t1 /= t2) (errorMsg pos "Expr types don't match")
-    return (EOr t1 exprT1 exprT2, t1)
+    return (EOr boolT exprT1 exprT2, t1)
 typedExpr (EObjNew _ cls) = return (EObjNew t cls, t)
     where t = Class () cls
 typedExpr (EArrNew _ argT expr) = do

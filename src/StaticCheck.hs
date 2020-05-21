@@ -1,4 +1,6 @@
-module StaticCheck where
+module StaticCheck (
+    staticCheck
+                   ) where
 
 import AbsSPL
 import CheckM
@@ -10,11 +12,7 @@ import Control.Monad.State
 import Data.Map as Map
 
 staticCheck :: Program FData -> Err ()
-staticCheck (Prog _ topdefs) = runCheckM m
-    where m = do
-              mapM_ declareTopDef topdefs
-              mapM_ staticCheck_TopDef topdefs
-
+staticCheck program = runCheckM (staticCheck_Program program)
 
 assert :: Bool -> String -> CheckM ()
 assert b msg = unless b (errorMsg () msg)
@@ -51,6 +49,11 @@ addOpType _ = intT
 relOpType :: RelOp a -> TType
 relOpType _ = intT
 
+staticCheck_Program :: Program FData -> CheckM ()
+staticCheck_Program (Prog _ topdefs) = do
+    mapM_ declareTopDef topdefs
+    mapM_ staticCheck_TopDef topdefs
+
 staticCheck_TopDef :: TopDef FData -> CheckM ()
 staticCheck_TopDef (FnDef _ t name args block) = doWithSavedEnv m
     where m = do
@@ -66,13 +69,13 @@ staticCheck_Stmt (BStmt _ (Bl _ stmts)) =
 staticCheck_Stmt (Decl _ t items) =
     mapM_ (staticCheck_Decl t) items
 staticCheck_Stmt (Ass _ e1 e2) = do
-    t1 <- staticCheck_Expr e1
+    t1 <- staticCheck_LExpr e1
     t2 <- staticCheck_Expr e2
     assertTypesEqual t1 t2
 staticCheck_Stmt (Incr _ e) =
-    assertTypesEqual intT =<< staticCheck_Expr e
+    assertTypesEqual intT =<< staticCheck_LExpr e
 staticCheck_Stmt (Decr _ e) =
-    assertTypesEqual intT =<< staticCheck_Expr e
+    assertTypesEqual intT =<< staticCheck_LExpr e
 staticCheck_Stmt (Ret _ e) = do
     t1 <- getReturnType
     assertTypesEqual t1 =<< staticCheck_Expr e
@@ -97,6 +100,12 @@ staticCheck_Decl t (NoInit _ name) = declareVar name t
 staticCheck_Decl t (Init _ name expr) = do
     assertTypesEqual t =<< staticCheck_Expr expr
     declareVar name t
+
+staticCheck_LExpr :: Expr FData -> CheckM TType
+staticCheck_LExpr e@(EVar _ _) = staticCheck_Expr e
+staticCheck_LExpr e@(EField _ _ _) = staticCheck_Expr e
+staticCheck_LExpr e@(EArrAcc _ _ _) = staticCheck_Expr e
+staticCheck_LExpr _ = errorMsg () "Wrong lexpr"
 
 
 staticCheck_Expr :: Expr FData -> CheckM TType
@@ -131,6 +140,16 @@ staticCheck_Expr (EMul _ expr1 op expr2) =
     staticCheck_BinOp expr1 expr2 (mulOpType op)
 staticCheck_Expr (EAdd _ expr1 op expr2) =
     staticCheck_BinOp expr1 expr2 (addOpType op)
+staticCheck_Expr (ERel _ e1 (EQU _) e2) = do
+    t1 <- staticCheck_Expr e1
+    t2 <- staticCheck_Expr e2
+    assertTypesEqual t1 t2
+    return boolT
+staticCheck_Expr (ERel _ e1 (NE _) e2) = do
+    t1 <- staticCheck_Expr e1
+    t2 <- staticCheck_Expr e2
+    assertTypesEqual t1 t2
+    return boolT
 staticCheck_Expr (ERel _ e1 op e2) = do
     staticCheck_BinOp e1 e2 (relOpType op)
     return boolT
