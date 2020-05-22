@@ -10,7 +10,8 @@ data BasicBlock = BB Ident [IR]
 
 data BBGraph = G { ids :: Map Int BasicBlock
                  , next :: Map Int [Int]
-                 , prev :: Map Int [Int] }
+                 , prev :: Map Int [Int]
+                 , layout :: Map Int (Maybe Int) }
     deriving (Eq)
 
 splitIntoBasicBlocks :: [IR] -> BBGraph
@@ -35,9 +36,11 @@ getBasicBlock' (x@(IR_Label _):xs) ys = (ys, x:xs)
 getBasicBlock' (ir:xs) ys = getBasicBlock' xs (ir:ys)
 
 buildBBGraph :: [BasicBlock] -> BBGraph
-buildBBGraph bbs = G { ids = ids', next = next', prev = prev' }
+buildBBGraph bbs = G { ids = ids', next = next', prev = prev', layout = layout' }
     where bbs' = [BB (Ident "__START__") []] ++ bbs ++ [BB (Ident "__END__") []]
           ids' = Map.fromList (zip [1..] bbs')
+          n i (BB name _) = if name == Ident "__END__" then Nothing else Just (i + 1)
+          layout' = Map.mapWithKey n ids'
           ids_rev = Map.fromList (zip (Prelude.map (\(BB name _) -> name) bbs') [1..])
           next' = Map.fromList (zip [1..] (Prelude.map (getNext ids_rev) bbs'))
           prev' = Map.fromList (zip [1..] (Prelude.map (getPrev ids_rev next') bbs'))
@@ -61,4 +64,10 @@ getPrev ids next (BB name _) =
         next' = Map.toList next
      in Prelude.map fst (Prelude.filter ((elem n) . snd) next')
 
+layoutBBGraph :: BBGraph -> [IR]
+layoutBBGraph g = concat (Prelude.map (\i -> f ((ids g) ! i)) (l 1 []))
+    where f (BB name xs) = (IR_Label name):xs
+          l i acc = case ((layout g) ! i) of
+                      Just j -> l j (i:acc)
+                      Nothing -> reverse (i:acc)
 

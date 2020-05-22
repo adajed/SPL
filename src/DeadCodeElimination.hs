@@ -25,9 +25,9 @@ isUsed g ir =
 
 isVarUsed :: BBGraph -> Var -> Bool
 isVarUsed g x = any f (Map.elems (ids g))
-    where f (BB _ xs) = any (uses (VVar x)) xs
+    where f (BB _ xs) = any (uses (VarIR x)) xs
 
-uses :: Value -> IR -> Bool
+uses :: ValIR -> IR -> Bool
 uses v ir =
     case ir of
       IR_Ass _ v' -> v == v'

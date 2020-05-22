@@ -34,7 +34,7 @@ eliminate :: [IR] -> (IR, IR) -> [IR]
 eliminate xs (ir1, ir2) =
     case (takeVar ir1, takeVar ir2) of
       (Just x, Just y) ->
-          let newir = IR_Ass y (VVar x)
+          let newir = IR_Ass y (VarIR x)
               f ir = if ir == ir2 then newir else ir
            in Prelude.map f xs
       _ -> xs

@@ -22,13 +22,13 @@ trivialPhiElimination_zero g =
 
 remove :: BBGraph -> IR -> BBGraph
 remove g (IR_Phi x []) = mapIR f g
-    where f (IR_Phi x' vs) = IR_Phi x' (Prelude.filter (not . (==(VVar x)) . snd) vs)
+    where f (IR_Phi x' vs) = IR_Phi x' (Prelude.filter (not . (==(VarIR x)) . snd) vs)
           f ir = ir
 remove g _ = g
 
 trivialPhiElimination_loop :: BBGraph -> BBGraph
 trivialPhiElimination_loop = mapIR f
-    where f (IR_Phi x vs) = IR_Phi x (Prelude.filter ((/= (VVar x)) . snd) vs)
+    where f (IR_Phi x vs) = IR_Phi x (Prelude.filter ((/= (VarIR x)) . snd) vs)
           f ir = ir
 
 trivialPhiElimination_allTheSame :: BBGraph -> BBGraph

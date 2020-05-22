@@ -10,91 +10,91 @@ arithmeticOptimizations = mapIR (binOp . condJump)
 binOp :: IR -> IR
 binOp ir@(IR_BinOp (BOpInt IAdd) x v1 v2) =
     case (v1, v2) of
-      (_, VInt 0) -> IR_Ass x v1
-      (VInt 0, _) -> IR_Ass x v2
-      _ -> if v1 == v2 then IR_BinOp (BOpInt IMul) x v1 (VInt 2) else ir
+      (_, IntIR 0) -> IR_Ass x v1
+      (IntIR 0, _) -> IR_Ass x v2
+      _ -> if v1 == v2 then IR_BinOp (BOpInt IMul) x v1 (IntIR 2) else ir
 binOp ir@(IR_BinOp (BOpInt ISub) x v1 v2) =
     case (v1, v2) of
-      (_, VInt 0) -> IR_Ass x v1
-      (VInt 0, _) -> IR_UnOp (UOpInt INeg) x v2
-      _ -> if v1 == v2 then IR_Ass x (VInt 0) else ir
+      (_, IntIR 0) -> IR_Ass x v1
+      (IntIR 0, _) -> IR_UnOp (UOpInt INeg) x v2
+      _ -> if v1 == v2 then IR_Ass x (IntIR 0) else ir
 binOp ir@(IR_BinOp (BOpInt IMul) x v1 v2) =
     case (v1, v2) of
-      (_, VInt 0) -> IR_Ass x (VInt 0)
-      (_, VInt 1) -> IR_Ass x v1
-      (_, VInt (-1)) -> IR_UnOp (UOpInt INeg) x v1
-      (_, VInt 2) -> IR_BinOp (BOpInt ILshift) x v1 (VInt 1)
-      (_, VInt 4) -> IR_BinOp (BOpInt ILshift) x v1 (VInt 2)
-      (_, VInt 8) -> IR_BinOp (BOpInt ILshift) x v1 (VInt 3)
-      (_, VInt 16) -> IR_BinOp (BOpInt ILshift) x v1 (VInt 4)
-      (VInt 0, _) -> IR_Ass x (VInt 0)
-      (VInt 1, _) -> IR_Ass x v2
-      (VInt (-1), _) -> IR_UnOp (UOpInt INeg) x v2
-      (VInt 2, _) -> IR_BinOp (BOpInt ILshift) x v2 (VInt 1)
-      (VInt 4, _) -> IR_BinOp (BOpInt ILshift) x v2 (VInt 2)
-      (VInt 8, _) -> IR_BinOp (BOpInt ILshift) x v2 (VInt 3)
-      (VInt 16, _) -> IR_BinOp (BOpInt ILshift) x v2 (VInt 4)
+      (_, IntIR 0) -> IR_Ass x (IntIR 0)
+      (_, IntIR 1) -> IR_Ass x v1
+      (_, IntIR (-1)) -> IR_UnOp (UOpInt INeg) x v1
+      (_, IntIR 2) -> IR_BinOp (BOpInt ILshift) x v1 (IntIR 1)
+      (_, IntIR 4) -> IR_BinOp (BOpInt ILshift) x v1 (IntIR 2)
+      (_, IntIR 8) -> IR_BinOp (BOpInt ILshift) x v1 (IntIR 3)
+      (_, IntIR 16) -> IR_BinOp (BOpInt ILshift) x v1 (IntIR 4)
+      (IntIR 0, _) -> IR_Ass x (IntIR 0)
+      (IntIR 1, _) -> IR_Ass x v2
+      (IntIR (-1), _) -> IR_UnOp (UOpInt INeg) x v2
+      (IntIR 2, _) -> IR_BinOp (BOpInt ILshift) x v2 (IntIR 1)
+      (IntIR 4, _) -> IR_BinOp (BOpInt ILshift) x v2 (IntIR 2)
+      (IntIR 8, _) -> IR_BinOp (BOpInt ILshift) x v2 (IntIR 3)
+      (IntIR 16, _) -> IR_BinOp (BOpInt ILshift) x v2 (IntIR 4)
       _ -> ir
 binOp ir@(IR_BinOp (BOpInt IDiv) x v1 v2) =
     case (v1, v2) of
-      (VInt 0, _) -> IR_Ass x (VInt 0)
-      (_, VInt 1) -> IR_Ass x v1
-      (_, VInt (-1)) -> IR_UnOp (UOpInt INeg) x v1
-      (_, VInt 2) -> IR_BinOp (BOpInt IRshift) x v1 (VInt 1)
-      (_, VInt 4) -> IR_BinOp (BOpInt IRshift) x v1 (VInt 2)
-      (_, VInt 8) -> IR_BinOp (BOpInt IRshift) x v1 (VInt 3)
-      (_, VInt 16) -> IR_BinOp (BOpInt IRshift) x v1 (VInt 4)
-      _ -> if v1 == v2 then IR_Ass x (VInt 1) else ir
+      (IntIR 0, _) -> IR_Ass x (IntIR 0)
+      (_, IntIR 1) -> IR_Ass x v1
+      (_, IntIR (-1)) -> IR_UnOp (UOpInt INeg) x v1
+      (_, IntIR 2) -> IR_BinOp (BOpInt IRshift) x v1 (IntIR 1)
+      (_, IntIR 4) -> IR_BinOp (BOpInt IRshift) x v1 (IntIR 2)
+      (_, IntIR 8) -> IR_BinOp (BOpInt IRshift) x v1 (IntIR 3)
+      (_, IntIR 16) -> IR_BinOp (BOpInt IRshift) x v1 (IntIR 4)
+      _ -> if v1 == v2 then IR_Ass x (IntIR 1) else ir
 binOp ir@(IR_BinOp (BOpInt IMod) x v1 v2) =
     case (v1, v2) of
-      (_, VInt 1) -> IR_Ass x (VInt 0)
-      _ -> if v1 == v2 then IR_Ass x (VInt 0) else ir
+      (_, IntIR 1) -> IR_Ass x (IntIR 0)
+      _ -> if v1 == v2 then IR_Ass x (IntIR 0) else ir
 binOp ir@(IR_BinOp (BOpInt ILshift) x v1 v2) =
     case (v1, v2) of
-      (VInt 0, _) -> IR_Ass x (VInt 0)
+      (IntIR 0, _) -> IR_Ass x (IntIR 0)
       _ -> ir
 binOp ir@(IR_BinOp (BOpInt IRshift) x v1 v2) =
     case (v1, v2) of
-      (VInt 0, _) -> IR_Ass x (VInt 0)
+      (IntIR 0, _) -> IR_Ass x (IntIR 0)
       _ -> ir
 binOp ir@(IR_BinOp (BOpInt IBitAnd) x v1 v2) =
     case (v1, v2) of
-      (VInt 0, _) -> IR_Ass x (VInt 0)
-      (_, VInt 0) -> IR_Ass x (VInt 0)
+      (IntIR 0, _) -> IR_Ass x (IntIR 0)
+      (_, IntIR 0) -> IR_Ass x (IntIR 0)
       _ -> ir
 binOp ir@(IR_BinOp (BOpBool BAnd) x v1 v2) =
     case (v1, v2) of
-      (VBool True, _) -> IR_Ass x v2
-      (VBool False, _) -> IR_Ass x (VBool False)
-      (_, VBool True) -> IR_Ass x v1
-      (_, VBool False) -> IR_Ass x (VBool False)
+      (BoolIR True, _) -> IR_Ass x v2
+      (BoolIR False, _) -> IR_Ass x (BoolIR False)
+      (_, BoolIR True) -> IR_Ass x v1
+      (_, BoolIR False) -> IR_Ass x (BoolIR False)
       _ -> if v1 == v2 then IR_Ass x v1 else ir
 binOp ir@(IR_BinOp (BOpBool BOr) x v1 v2) =
     case (v1, v2) of
-      (VBool True, _) -> IR_Ass x (VBool True)
-      (VBool False, _) -> IR_Ass x v2
-      (_, VBool True) -> IR_Ass x (VBool True)
-      (_, VBool False) -> IR_Ass x v1
+      (BoolIR True, _) -> IR_Ass x (BoolIR True)
+      (BoolIR False, _) -> IR_Ass x v2
+      (_, BoolIR True) -> IR_Ass x (BoolIR True)
+      (_, BoolIR False) -> IR_Ass x v1
       _ -> if v1 == v2 then IR_Ass x v1 else ir
 binOp ir@(IR_BinOp (BOpBool BXor) x v1 v2) =
     case (v1, v2) of
-      (VBool True, _) -> IR_UnOp (UOpBool BNot) x v2
-      (VBool False, _) -> IR_Ass x v2
-      (_, VBool True) -> IR_UnOp (UOpBool BNot) x v1
-      (_, VBool False) -> IR_Ass x v1
-      _ -> if v1 == v2 then IR_Ass x (VBool False) else ir
+      (BoolIR True, _) -> IR_UnOp (UOpBool BNot) x v2
+      (BoolIR False, _) -> IR_Ass x v2
+      (_, BoolIR True) -> IR_UnOp (UOpBool BNot) x v1
+      (_, BoolIR False) -> IR_Ass x v1
+      _ -> if v1 == v2 then IR_Ass x (BoolIR False) else ir
 binOp ir@(IR_BinOp (BOpRel LTH) x v1 v2) =
-    if v1 == v2 then IR_Ass x (VBool False) else ir
+    if v1 == v2 then IR_Ass x (BoolIR False) else ir
 binOp ir@(IR_BinOp (BOpRel LEQ) x v1 v2) =
-    if v1 == v2 then IR_Ass x (VBool True) else ir
+    if v1 == v2 then IR_Ass x (BoolIR True) else ir
 binOp ir@(IR_BinOp (BOpRel GTH) x v1 v2) =
-    if v1 == v2 then IR_Ass x (VBool False) else ir
+    if v1 == v2 then IR_Ass x (BoolIR False) else ir
 binOp ir@(IR_BinOp (BOpRel GEQ) x v1 v2) =
-    if v1 == v2 then IR_Ass x (VBool True) else ir
+    if v1 == v2 then IR_Ass x (BoolIR True) else ir
 binOp ir@(IR_BinOp (BOpRel EQU) x v1 v2) =
-    if v1 == v2 then IR_Ass x (VBool True) else ir
+    if v1 == v2 then IR_Ass x (BoolIR True) else ir
 binOp ir@(IR_BinOp (BOpRel NEQ) x v1 v2) =
-    if v1 == v2 then IR_Ass x (VBool False) else ir
+    if v1 == v2 then IR_Ass x (BoolIR False) else ir
 binOp ir = ir
 
 condJump :: IR -> IR

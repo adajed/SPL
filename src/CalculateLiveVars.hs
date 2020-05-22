@@ -32,8 +32,8 @@ combineOuts g m = Map.mapWithKey f m
     where f i outs = (init outs) ++ [newlast i]
           newlast i = Set.unions (Prelude.map (head . (m!)) ((next g) ! i))
 
-getVar :: Value -> Set Var
-getVar (VVar var) = Set.singleton var
+getVar :: ValIR -> Set Var
+getVar (VarIR var) = Set.singleton var
 getVar _ = Set.empty
 
 kill :: IR -> Set Var

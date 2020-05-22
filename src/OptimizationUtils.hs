@@ -5,7 +5,7 @@ import Data.Map as Map
 import BasicBlock
 import IR
 
-modifyValue :: (Value -> Value) -> IR -> IR
+modifyValue :: (ValIR -> ValIR) -> IR -> IR
 modifyValue f ir =
     case ir of
       IR_Ass x v -> IR_Ass x (f v)

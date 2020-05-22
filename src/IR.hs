@@ -11,20 +11,20 @@ instance Show Var where
     show (VarT n)    = "t" ++ (show n)
     show (VarC name n) = show name ++ "__" ++ show n
 
-data Value = VVar Var
-           | VInt Int
-           | VBool Bool
-           | VVoid
-           | VLabel Ident
-           | VArg Int
+data ValIR = VarIR Var
+           | IntIR Int
+           | BoolIR Bool
+           | VoidIR
+           | LabelIR Ident
+           | ArgIR Int
     deriving (Eq)
-instance Show Value where
-    show (VVar var) = show var
-    show (VInt n) = show n
-    show (VBool b)  = show b
-    show (VVoid) = "void"
-    show (VLabel label) = show label
-    show (VArg n) = "arg" ++ show n
+instance Show ValIR where
+    show (VarIR var) = show var
+    show (IntIR n) = show n
+    show (BoolIR b)  = show b
+    show (VoidIR) = "void"
+    show (LabelIR label) = show label
+    show (ArgIR n) = "arg" ++ show n
 
 data IBinOp = IAdd | ISub | IMul | IDiv | IMod | ILshift | IRshift | IBitAnd | IBitOr | IBitXor
     deriving (Eq)
@@ -82,17 +82,17 @@ instance Show UnOp where
     show (UOpBool op) = show op
 
 data IR = IR_Label Ident                    -- label
-        | IR_Ass Var Value                  -- assignment
-        | IR_BinOp BinOp Var Value Value    -- binary op
-        | IR_UnOp UnOp Var Value          -- unary op
-        | IR_MemRead Var Value           -- memory read
-        | IR_MemSave Value Value            -- memory save
-        | IR_Param Value                    -- set next param to function
-        | IR_Call Var Value Int             -- call function
-        | IR_Return Value                   -- return value from function
+        | IR_Ass Var ValIR                  -- assignment
+        | IR_BinOp BinOp Var ValIR ValIR    -- binary op
+        | IR_UnOp UnOp Var ValIR          -- unary op
+        | IR_MemRead Var ValIR           -- memory read
+        | IR_MemSave ValIR ValIR            -- memory save
+        | IR_Param ValIR                    -- set next param to function
+        | IR_Call Var ValIR Int             -- call function
+        | IR_Return ValIR                   -- return value from function
         | IR_Jump Ident
-        | IR_CondJump Value RelOp Value Ident
-        | IR_Phi Var [(Int, Value)]       -- phi function (for SSA)
+        | IR_CondJump ValIR RelOp ValIR Ident
+        | IR_Phi Var [(Int, ValIR)]       -- phi function (for SSA)
         | IR_Nop                          -- no op
         | IR_Argument Var                 -- argument from function
         deriving (Eq)

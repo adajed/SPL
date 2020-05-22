@@ -1,0 +1,193 @@
+main:
+IDS:
+	1 -> __START__
+	2 -> main
+	3 -> __END__
+NEXT:
+	1 -> [2]
+	2 -> [3]
+	3 -> []
+PREV:
+	1 -> [2]
+	2 -> [3]
+	3 -> []
+BASIC BLOCKS:
+__START__
+
+main
+	param 100
+	param 100
+	t89 = call new_matrix 2
+	param 100
+	param 100
+	t92 = call new_matrix 2
+	param 100
+	param 100
+	t95 = call new_matrix 2
+	param t89
+	param t92
+	param t95
+	param 100
+	param 100
+	param 100
+	t102 = call matmul 6
+	return 0
+
+__END__
+
+matmul:
+IDS:
+	1 -> __START__
+	2 -> matmul
+	3 -> .L0
+	4 -> .L2
+	5 -> .L4
+	6 -> .L5
+	7 -> temp0
+	8 -> .L3
+	9 -> temp1
+	10 -> .L1
+	11 -> __END__
+NEXT:
+	1 -> [2]
+	2 -> [10]
+	3 -> [8]
+	4 -> [6]
+	5 -> [6]
+	6 -> [5,7]
+	7 -> [8]
+	8 -> [4,9]
+	9 -> [10]
+	10 -> [3,11]
+	11 -> []
+PREV:
+	1 -> [2]
+	2 -> [10]
+	3 -> [8]
+	4 -> [6]
+	5 -> [6]
+	6 -> [5,7]
+	7 -> [8]
+	8 -> [4,9]
+	9 -> [10]
+	10 -> [3,11]
+	11 -> []
+BASIC BLOCKS:
+__START__
+
+matmul
+	x_1__11 = 0
+	jump .L1
+
+.L0
+	y_2__9 = 0
+	jump .L3
+
+.L2
+	t4 = x_1__11 * 8
+	t5 = arg3 + t4
+	t6 = * t5
+	t8 = y_2__9 * 4
+	t9 = t6 + t8
+	* t9 = 0
+	i_3__7 = 0
+	jump .L5
+
+.L4
+	t14 = x_1__11 * 8
+	t15 = arg1 + t14
+	t16 = * t15
+	t18 = i_3__7 * 4
+	t19 = t16 + t18
+	t20 = * t19
+	t23 = i_3__7 * 8
+	t24 = arg2 + t23
+	t25 = * t24
+	t27 = y_2__9 * 4
+	t28 = t25 + t27
+	t29 = * t28
+	t30 = t20 * t29
+	t34 = arg3 + t14
+	t35 = * t34
+	t38 = t35 + t27
+	t43 = * t34
+	t46 = t43 + t27
+	t47 = * t46
+	t49 = t47 + t30
+	* t38 = t49
+	t51 = i_3__7 + 1
+	i_3__7 = t51
+
+.L5
+	t54 = i_3__7 < arg5
+	if t54 jump .L4
+
+temp0
+	t56 = y_2__9 + 1
+	y_2__9 = t56
+
+.L3
+	t59 = y_2__9 < arg6
+	if t59 jump .L2
+
+temp1
+	t61 = x_1__11 + 1
+	x_1__11 = t61
+
+.L1
+	t64 = x_1__11 < arg4
+	if t64 jump .L0
+
+__END__
+
+new_matrix:
+IDS:
+	1 -> __START__
+	2 -> new_matrix
+	3 -> .L6
+	4 -> .L7
+	5 -> temp0
+	6 -> __END__
+NEXT:
+	1 -> [2]
+	2 -> [4]
+	3 -> [4]
+	4 -> [3,5]
+	5 -> [6]
+	6 -> []
+PREV:
+	1 -> [2]
+	2 -> [4]
+	3 -> [4]
+	4 -> [3,5]
+	5 -> [6]
+	6 -> []
+BASIC BLOCKS:
+__START__
+
+new_matrix
+	t67 = arg1 * 8
+	param t67
+	t68 = call malloc 1
+	i_1__5 = 0
+	jump .L7
+
+.L6
+	t72 = i_1__5 * 8
+	t73 = t68 + t72
+	t76 = arg2 * 4
+	param t76
+	t77 = call malloc 1
+	* t73 = t77
+	t79 = i_1__5 + 1
+	i_1__5 = t79
+
+.L7
+	t82 = i_1__5 < arg1
+	if t82 jump .L6
+
+temp0
+	return t68
+
+__END__
+

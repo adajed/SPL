@@ -62,7 +62,7 @@ graphToSSA g = do
 moveArgsToStart :: BBGraph -> BBGraph
 moveArgsToStart g = g''
     where args = concat (Prelude.map getArgsBB (Map.elems (ids g)))
-          newargs = Prelude.map (\(x, n) -> IR_Ass x (VArg n)) (Prelude.zip args [1..])
+          newargs = Prelude.map (\(x, n) -> IR_Ass x (ArgIR n)) (Prelude.zip args [1..])
           getArgsBB (BB _ xs) = concat (Prelude.map getArgsIR xs)
           getArgsIR (IR_Argument x) = [x]
           getArgsIR ir = []
@@ -95,7 +95,7 @@ adjustPhi g lastN = g { ids = ids' }
           f n (BB name xs) = BB name (Prelude.map (p n) xs)
           p n (IR_Phi (VarC x t) _) = IR_Phi (VarC x t) prevs
               where prevs = Prelude.map h ((prev g) ! n)
-                    h i = (i, VVar (VarC x ((lastN ! i) ! x)))
+                    h i = (i, VarIR (VarC x ((lastN ! i) ! x)))
           p n ir = ir
 
 basicBlockToSSA :: BasicBlock -> SSA (BasicBlock, Map Ident Int)
@@ -138,10 +138,10 @@ irToSSA (IR_Return v) = do
     return (IR_Return v')
 irToSSA ir = return ir
 
-valueToSSA :: Value -> SSA Value
-valueToSSA (VVar (VarN name)) = do
+valueToSSA :: ValIR -> SSA ValIR
+valueToSSA (VarIR (VarN name)) = do
     n <- liftM (!name) $ gets lastCounter
-    return (VVar (VarC name n))
+    return (VarIR (VarC name n))
 valueToSSA v = return v
 
 varToSSA :: Var -> SSA Var
@@ -163,9 +163,9 @@ removePhi g = Prelude.foldl f g' phis
           f g (IR_Phi x vs) = insertPhiEquivalence x vs g
           f g _ = g
 
-insertPhiEquivalence :: Var -> [(Int, Value)] -> BBGraph -> BBGraph
+insertPhiEquivalence :: Var -> [(Int, ValIR)] -> BBGraph -> BBGraph
 insertPhiEquivalence x vs g = Prelude.foldl f g vs
-    where f g (i, v) = if v == VVar x then g
+    where f g (i, v) = if v == VarIR x then g
                                       else insertAtTheEnd i (IR_Ass x v) g
 
 insertAtTheEnd :: Int -> IR -> BBGraph -> BBGraph

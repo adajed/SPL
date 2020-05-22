@@ -1,0 +1,14 @@
+int main()
+{
+    int n = 100;
+    int[] arr = new int[n];
+    int i = 0;
+
+    while (i < n)
+    {
+        arr[i] = arr[i] + arr[i] * arr[i];
+        i++;
+    }
+
+    return 0;
+}

@@ -12,9 +12,11 @@ import SkelSPL
 import PrintSPL
 import AbsSPL
 
+import CodeM
 import Defs ( Pos )
 import ExprTypeCheck ( typeProgram )
 import GenerateIR ( runGenerateIR )
+import GenCode ( genCode )
 import ErrM
 import IR
 import BasicBlock
@@ -50,15 +52,21 @@ printBBGraph (name, g) = do
     hPutStrLn stdout "BASIC BLOCKS:"
     mapM_ printBasicBlock (Map.elems (ids g))
 
+printCode :: (Ident, [Code]) -> IO ()
+printCode (name, xs) = do
+    hPutStrLn stdout (show name ++ ":")
+    mapM_ (\x -> hPutStrLn stdout ("\t" ++ show x)) xs
 
-compileProgram :: ParseFun (Program ()) -> String -> Err (Map Ident BBGraph)
+
+
+compileProgram :: ParseFun (Program ()) -> String -> Err (Map Ident [Code])
 compileProgram parser fileContent = do
     let abstractTree = myLLexer fileContent
     program <- parser abstractTree
     staticCheck program
     program <- typeProgram program
     code <- runGenerateIR program
-    let bbgraphs = Map.map optimizeCode code
+    let bbgraphs = Map.map (genCode . layoutBBGraph . optimizeCode) code
     return bbgraphs
 
 optimizeCode :: [IR] -> BBGraph
@@ -75,8 +83,8 @@ run parser filepath = do
       Bad errorMsg -> do
           hPutStrLn stderr errorMsg
           exitFailure
-      Ok bbgraphs -> do
-          mapM_ printBBGraph (Map.assocs bbgraphs)
+      Ok code -> do
+          mapM_ printCode (Map.assocs code)
           exitSuccess
 
 main :: IO ()

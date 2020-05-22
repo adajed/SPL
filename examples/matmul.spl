@@ -1,0 +1,49 @@
+void matmul(int[][] A, int[][] B, int[][] C, int n,  int m, int k)
+{
+    int x = 0;
+    while (x < n)
+    {
+        int y = 0;
+        while (y < k)
+        {
+            C[x][y] = 0;
+            int i = 0;
+            while (i < m)
+            {
+                int temp = A[x][i] * B[i][y];
+                C[x][y] = C[x][y] + temp;
+                i++;
+            }
+            y++;
+        }
+        x++;
+    }
+}
+
+int[][] new_matrix(int n, int k)
+{
+    int[][] mat = new int[][n];
+    int i = 0;
+    while (i < n)
+    {
+        mat[i] = new int[k];
+        i++;
+    }
+
+    return mat;
+}
+
+int main()
+{
+    int n = 100;
+    int m = 100;
+    int k = 100;
+
+    int[][] A = new_matrix(n, m);
+    int[][] B = new_matrix(m, k);
+    int[][] C = new_matrix(n, k);
+
+    matmul(A, B, C, n, m, k);
+
+    return 0;
+}
