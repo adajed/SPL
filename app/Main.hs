@@ -66,8 +66,9 @@ compileProgram parser fileContent = do
     staticCheck program
     program <- typeProgram program
     code <- runGenerateIR program
-    let bbgraphs = Map.map (genCode . layoutBBGraph . optimizeCode) code
-    return bbgraphs
+    let bbgraphs = Map.map optimizeCode code
+    let code = Map.map (genCode . layoutBBGraph) bbgraphs
+    return code
 
 optimizeCode :: [IR] -> BBGraph
 optimizeCode =  removePhi .

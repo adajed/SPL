@@ -94,6 +94,7 @@ data Code = CAdd Val Val    -- add
           | CSub Val Val
           | CBitXor Val Val    -- bitwise xor
           | CNop
+          | CLeave
           | CRet               -- return
           deriving (Eq)
 instance Show Code where
@@ -126,5 +127,6 @@ instance Show Code where
                   CSub a b              -> c ["sub", show a, ",", show b]
                   CBitXor a b           -> c ["xor", show a, ",", show b]
                   CNop                  -> c ["nop"]
+                  CLeave                -> c ["leave"]
                   CRet                  -> c ["ret"]
                 where c = intercalate " "
