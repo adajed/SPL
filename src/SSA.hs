@@ -126,9 +126,15 @@ irToSSA (IR_UnOp op x v) = do
     v' <- valueToSSA v
     x' <- varToSSA x
     return (IR_UnOp op x' v')
-irToSSA (IR_Param v) = do
-    v' <- valueToSSA v
-    return (IR_Param v')
+irToSSA (IR_Call y f xs) = do
+    y' <- varToSSA y
+    f' <- valueToSSA f
+    xs' <- mapM valueToSSA xs
+    return (IR_Call y' f' xs')
+irToSSA (IR_VoidCall f xs) = do
+    f' <- valueToSSA f
+    xs' <- mapM valueToSSA xs
+    return (IR_VoidCall f' xs')
 irToSSA (IR_CondJump v1 op v2 label) = do
     v1' <- valueToSSA v1
     v2' <- valueToSSA v2

@@ -11,7 +11,6 @@ import Control.Monad.Identity
 data SState = SState { code :: [Code]
                      , varAddress :: Map Var Val
                      , offset :: Int
-                     , argCounter :: Int
                      }
 
 type GenCode = StateT SState Identity
@@ -21,7 +20,7 @@ execGenCode m = reverse (code (runIdentity (execStateT m state)))
     where state = SState { code = []
                          , varAddress = Map.empty
                          , offset = 0
-                         , argCounter }
+                         }
 
 emit :: Code -> GenCode ()
 emit c = modify (\s -> s { code = c:(code s) } )
@@ -87,10 +86,13 @@ allocVar (IR_MemRead x v) = do
 allocVar (IR_MemSave v1 v2) = do
     allocValue v1
     allocValue v2
-allocVar (IR_Param v) = allocValue v
-allocVar (IR_Call x y _) = do
+allocVar (IR_Call x y xs) = do
     tryAllocVar x
     allocValue y
+    mapM_ allocValue xs
+allocVar (IR_VoidCall y xs) = do
+    allocValue y
+    mapM_ allocValue xs
 allocVar (IR_CondJump v1 _ v2 _) = do
     allocValue v1
     allocValue v2
@@ -196,12 +198,6 @@ genIR (IR_BinOp (BOpBool BOr) x v1 v2) =
     genIR (IR_BinOp (BOpInt IBitOr) x v1 v2)
 genIR (IR_BinOp (BOpBool BXor) x v1 v2) =
     genIR (IR_BinOp (BOpInt IBitXor) x v1 v2)
-genIR (IR_BinOp (BOpRel LTH) x v1 v2) = genIR_cmp v1 v2
-genIR (IR_BinOp (BOpRel LEQ) x v1 v2) = genIR_cmp v1 v2
-genIR (IR_BinOp (BOpRel GTH) x v1 v2) = genIR_cmp v1 v2
-genIR (IR_BinOp (BOpRel GEQ) x v1 v2) = genIR_cmp v1 v2
-genIR (IR_BinOp (BOpRel EQU) x v1 v2) = genIR_cmp v1 v2
-genIR (IR_BinOp (BOpRel NEQ) x v1 v2) = genIR_cmp v1 v2
 genIR (IR_UnOp (UOpInt INeg) x v) = do
     y <- toVal v
     emit (CMov eax y)
@@ -224,15 +220,13 @@ genIR (IR_MemSave v1 v2) = do
     y1 <- getMem =<< toVal v1
     y2 <- toVal v2
     emit (CMov y1 y2)
-genIR (IR_Param v) = do
-    y <- toVal v
-    emit (CMov (VReg di DWord) y)
-genIR (IR_Call x v _) = do
+genIR (IR_Call x v xs) = do
     y <- toVal v
     emit (CCall y)
     moveToVar x eax
-
-
+genIR (IR_VoidCall v xs) = do
+    y <- toVal v
+    emit (CCall y)
 genIR (IR_Return v) = do
     y <- toVal v
     emit (CMov eax y)

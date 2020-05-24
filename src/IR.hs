@@ -4,12 +4,13 @@ import Data.List ( intercalate )
 
 import AbsSPL ( Ident )
 
-data Var = VarN Ident | VarT Int | VarC Ident Int
+data Var = VarN Ident | VarT Int | VarC Ident Int | VarA Int
     deriving (Eq, Ord)
 instance Show Var where
     show (VarN name) = show name
     show (VarT n)    = "t" ++ (show n)
     show (VarC name n) = show name ++ "__" ++ show n
+    show (VarA n) = "arg" ++ show n
 
 data ValIR = VarIR Var
            | IntIR Int
@@ -68,12 +69,11 @@ instance Show RelOp where
     show EQU = "=="
     show NEQ = "!="
 
-data BinOp = BOpInt IBinOp | BOpBool BBinOp | BOpRel RelOp
+data BinOp = BOpInt IBinOp | BOpBool BBinOp
     deriving (Eq)
 instance Show BinOp where
     show (BOpInt op) = show op
     show (BOpBool op) = show op
-    show (BOpRel op) = show op
 
 data UnOp = UOpInt IUnOp | UOpBool BUnOp
     deriving (Eq)
@@ -87,8 +87,8 @@ data IR = IR_Label Ident                    -- label
         | IR_UnOp UnOp Var ValIR          -- unary op
         | IR_MemRead Var ValIR           -- memory read
         | IR_MemSave ValIR ValIR            -- memory save
-        | IR_Param ValIR                    -- set next param to function
-        | IR_Call Var ValIR Int             -- call function
+        | IR_Call Var ValIR [ValIR]         -- call function
+        | IR_VoidCall ValIR [ValIR]         -- void call
         | IR_Return ValIR                   -- return value from function
         | IR_Jump Ident
         | IR_CondJump ValIR RelOp ValIR Ident
@@ -104,8 +104,8 @@ instance Show IR where
                 IR_UnOp op x v          -> c [show x, "=", show op, show v]
                 IR_MemRead x v          -> c [show x, "=", "*", show v]
                 IR_MemSave d s          -> c ["*", show d, "=", show s]
-                IR_Param v              -> c ["param", show v]
-                IR_Call x f n           -> c [show x, "=", "call", show f, show n]
+                IR_Call y f xs          -> c [show y, "=", "call", show f, show xs]
+                IR_VoidCall f xs        -> c ["call", show f, show xs]
                 IR_Return v             -> c ["return", show v]
                 IR_Jump l               -> c ["jump", show l]
                 IR_CondJump v1 op v2 l  -> c ["if", show v1, show op, show v2, "jump", show l]
