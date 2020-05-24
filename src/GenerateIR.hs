@@ -244,10 +244,8 @@ generateIR_Expr expr@(EArrAcc type_ arr index) = do
     loc <- emitIR_ToTemp (\t -> IR_BinOp (BOpInt IAdd) t (VVar arrV) v')
     emitIR_ToTemp (\t -> IR_MemRead t (VVar loc))
 generateIR_Expr (EApp _ (EVar _ fName) args) = do
-    let numberOfArgs = length args
-    let putParam expr = generateIR_Expr expr >>= emitIR . IR_Param . VVar
-    mapM_ putParam args
-    emitIR_ToTemp (\t -> IR_Call t (VLabel fName) numberOfArgs)
+    xs <- mapM (\e -> liftM VVar (generateIR_Expr e)) args
+    emitIR_ToTemp (\t -> IR_Call t (VLabel fName) xs)
 generateIR_Expr (EUnaryOp _ op expr) = generateIR_UnOp op' expr
     where op' = case op of
                   Neg _    -> UOpInt INeg
@@ -267,10 +265,9 @@ generateIR_Expr (EAdd _ expr1 op expr2) = generateIR_BinOp op' expr1 expr2
     where op' = case op of
                   Plus _  -> BOpInt IAdd
                   Minus _ -> BOpInt ISub
-generateIR_Expr (ERel _ expr1 op expr2) = generateIR_BinOp op' expr1 expr2
-    where op' = BOpRel (relop op)
-generateIR_Expr (EAnd _ expr1 expr2) = generateIR_BinOp (BOpBool BAnd) expr1 expr2
-generateIR_Expr (EOr _ expr1 expr2) = generateIR_BinOp (BOpBool BOr) expr1 expr2
+generateIR_Expr e@(ERel _ _ _ _) = generateIR_BoolExpr e
+generateIR_Expr e@(EAnd _ _ _) = generateIR_BoolExpr e
+generateIR_Expr e@(EOr _ _ _) = generateIR_BoolExpr e
 generateIR_Expr (EObjNew t cls) = do
     size <- liftM (!cls) $ gets classSize
     let arg1 = EInt (Int ()) (toInteger size)
@@ -328,6 +325,21 @@ generateIR_JumpExpr (EOr _ e1 e2) lTrue lFalse = do
     generateIR_JumpExpr e2 lTrue lFalse
 generateIR_JumpExpr expr lTrue lFalse = generateIR_JumpExpr expr' lTrue lFalse
     where expr' = ERel (Bool ()) expr (AbsSPL.EQU (Void ())) (ETrue (Bool ()))
+
+generateIR_BoolExpr :: Expr T -> GenerateIR Var
+generateIR_BoolExpr expr = do
+    lTrue <- getFreshLabel
+    lFalse <- getFreshLabel
+    lEnd <- getFreshLabel
+    t <- getFreshTemp
+    generateIR_JumpExpr expr lTrue lFalse
+    emitIR (IR_Label lTrue)
+    emitIR (IR_Ass t (VBool True))
+    emitIR (IR_Jump lEnd)
+    emitIR (IR_Label lFalse)
+    emitIR (IR_Ass t (VBool False))
+    emitIR (IR_Label lEnd)
+    return t
 
 exprType :: Expr T -> T
 exprType (ENull t) = t

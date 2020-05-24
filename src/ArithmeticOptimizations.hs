@@ -83,18 +83,6 @@ binOp ir@(IR_BinOp (BOpBool BXor) x v1 v2) =
       (_, VBool True) -> IR_UnOp (UOpBool BNot) x v1
       (_, VBool False) -> IR_Ass x v1
       _ -> if v1 == v2 then IR_Ass x (VBool False) else ir
-binOp ir@(IR_BinOp (BOpRel LTH) x v1 v2) =
-    if v1 == v2 then IR_Ass x (VBool False) else ir
-binOp ir@(IR_BinOp (BOpRel LEQ) x v1 v2) =
-    if v1 == v2 then IR_Ass x (VBool True) else ir
-binOp ir@(IR_BinOp (BOpRel GTH) x v1 v2) =
-    if v1 == v2 then IR_Ass x (VBool False) else ir
-binOp ir@(IR_BinOp (BOpRel GEQ) x v1 v2) =
-    if v1 == v2 then IR_Ass x (VBool True) else ir
-binOp ir@(IR_BinOp (BOpRel EQU) x v1 v2) =
-    if v1 == v2 then IR_Ass x (VBool True) else ir
-binOp ir@(IR_BinOp (BOpRel NEQ) x v1 v2) =
-    if v1 == v2 then IR_Ass x (VBool False) else ir
 binOp ir = ir
 
 condJump :: IR -> IR

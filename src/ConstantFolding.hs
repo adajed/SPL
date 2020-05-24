@@ -15,8 +15,6 @@ constantFold (IR_BinOp (BOpInt op) x (VInt n1) (VInt n2)) =
     IR_Ass x (VInt (calcIBinOp op n1 n2))
 constantFold (IR_BinOp (BOpBool op) x (VBool b1) (VBool b2)) =
     IR_Ass x (VBool (calcBBinOp op b1 b2))
-constantFold (IR_BinOp (BOpRel op) x (VInt n1) (VInt n2)) =
-    IR_Ass x (VBool (calcIRelOp op n1 n2))
 constantFold (IR_UnOp (UOpInt op) x (VInt n)) =
     IR_Ass x (VInt (calcIUnOp op n))
 constantFold (IR_UnOp (UOpBool op) x (VBool b)) =

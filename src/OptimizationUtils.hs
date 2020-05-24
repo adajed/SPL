@@ -13,8 +13,8 @@ modifyValue f ir =
       IR_UnOp op x v -> IR_UnOp op x (f v)
       IR_MemRead x v -> IR_MemRead x (f v)
       IR_MemSave v1 v2 -> IR_MemSave (f v1) (f v2)
-      IR_Param v -> IR_Param (f v)
-      IR_Call x v n -> IR_Call x (f v) n
+      IR_Call x v xs -> IR_Call x (f v) (fmap f xs)
+      IR_VoidCall v xs -> IR_VoidCall (f v) (fmap f xs)
       IR_Return v -> IR_Return (f v)
       IR_CondJump v1 op v2 l -> IR_CondJump (f v1) op (f v2) l
       IR_Phi x vs -> IR_Phi x (Prelude.map (\(n,v) -> (n, f v)) vs)
