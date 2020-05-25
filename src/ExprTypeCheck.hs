@@ -139,4 +139,5 @@ typedExpr (EArrNew _ argT expr) = do
     (exprT, t) <- typedExpr expr
     when (t /= intT) (errorMsg () "Size is not int")
     let aT = fmap (const ()) argT
-    return (EArrNew aT (toVoid argT) exprT, aT)
+    let arrayT = Array () aT
+    return (EArrNew arrayT (toVoid argT) exprT, arrayT)

@@ -48,7 +48,7 @@ printBBGraph (name, g) = do
     hPutStrLn stdout "NEXT:"
     mapM_ (\(n, ns) -> hPutStrLn stdout ("\t" ++ show n ++ " -> " ++ show ns)) (Map.toList (next g))
     hPutStrLn stdout "PREV:"
-    mapM_ (\(n, ns) -> hPutStrLn stdout ("\t" ++ show n ++ " -> " ++ show ns)) (Map.toList (next g))
+    mapM_ (\(n, ns) -> hPutStrLn stdout ("\t" ++ show n ++ " -> " ++ show ns)) (Map.toList (prev g))
     hPutStrLn stdout "BASIC BLOCKS:"
     mapM_ printBasicBlock (Map.elems (ids g))
 
@@ -66,15 +66,14 @@ compileProgram parser fileContent = do
     staticCheck program
     program <- typeProgram program
     code <- runGenerateIR program
-    let bbgraphs = Map.map optimizeCode code
-    let code = Map.map (genCode . layoutBBGraph) bbgraphs
+    bbgraphs <- mapM optimizeCode code
+    -- let code = Map.map (genCode . layoutBBGraph) bbgraphs
     return bbgraphs
 
-optimizeCode :: [IR] -> BBGraph
-optimizeCode =  removePhi .
-                optimize .
-                toSSA .
-                splitIntoBasicBlocks
+optimizeCode :: [IR] -> Err BBGraph
+optimizeCode code = do
+    g <- toSSA (splitIntoBasicBlocks code)
+    return (removePhi (optimize g))
 
 run :: ParseFun (Program ()) -> String -> IO ()
 run parser filepath = do

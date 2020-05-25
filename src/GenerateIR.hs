@@ -280,7 +280,7 @@ generateIR_Expr (EObjNew t cls) = do
     generateIR_Expr (EApp t (EVar t (Ident "malloc")) [arg1])
 generateIR_Expr (EArrNew tt t expr) =
     generateIR_Expr (EApp tt (EVar tt (Ident "malloc")) [size])
-        where size = EMul tt expr (Times tt) (EInt (Int ()) (fromIntegral (sizeOf t)))
+        where size = EMul (Int ()) expr (Times tt) (EInt (Int ()) (fromIntegral (sizeOf t)))
 
 generateIR_UnOp :: UnOp -> Expr T -> GenerateIR ValIR
 generateIR_UnOp op expr = do
