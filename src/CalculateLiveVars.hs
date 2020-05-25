@@ -7,7 +7,7 @@ import IR
 import BasicBlock
 
 
-calculateLiveVars :: BBGraph -> Map Int [Set Var]
+calculateLiveVars :: BBGraph -> Map Int [Set SVar]
 calculateLiveVars g = calculateLiveVars' initOuts
     where h (BB _ xs) = (Set.empty):(Prelude.map (const Set.empty) xs)
           initOuts = Map.map h (ids g)
@@ -17,26 +17,26 @@ calculateLiveVars g = calculateLiveVars' initOuts
                      then outs
                      else calculateLiveVars' (combineOuts g newouts)
 
-calculateIn :: Set Var -> IR -> Set Var
+calculateIn :: Set SVar -> IR -> Set SVar
 calculateIn out ir = Set.union (Set.difference out (kill ir)) (uses ir)
 
-calculateLiveBB :: Set Var -> BasicBlock -> [Set Var]
+calculateLiveBB :: Set SVar -> BasicBlock -> [Set SVar]
 calculateLiveBB out (BB name xs) = reverse (scanl calculateIn out (reverse xs))
 
-calculateLive :: Map Int [Set Var] -> BBGraph -> Map Int [Set Var]
+calculateLive :: Map Int [Set SVar] -> BBGraph -> Map Int [Set SVar]
 calculateLive m g = Map.mapWithKey f m
     where f i out = calculateLiveBB (last out) ((ids g) ! i)
 
-combineOuts :: BBGraph -> Map Int [Set Var] -> Map Int [Set Var]
+combineOuts :: BBGraph -> Map Int [Set SVar] -> Map Int [Set SVar]
 combineOuts g m = Map.mapWithKey f m
     where f i outs = (init outs) ++ [newlast i]
           newlast i = Set.unions (Prelude.map (head . (m!)) ((next g) ! i))
 
-getVar :: ValIR -> Set Var
+getVar :: ValIR -> Set SVar
 getVar (VarIR var) = Set.singleton var
 getVar _ = Set.empty
 
-kill :: IR -> Set Var
+kill :: IR -> Set SVar
 kill (IR_Ass x _) = Set.singleton x
 kill (IR_BinOp _ x _ _) = Set.singleton x
 kill (IR_UnOp _ x _) = Set.singleton x
@@ -44,12 +44,12 @@ kill (IR_MemRead x _) = Set.singleton x
 kill (IR_Call x _ _) = Set.singleton x
 kill _ = Set.empty
 
-uses :: IR -> Set Var
+uses :: IR -> Set SVar
 uses (IR_Ass _ v) = getVar v
 uses (IR_BinOp _ _ v1 v2) = Set.unions (Prelude.map getVar [v1, v2])
 uses (IR_UnOp _ _ v) = getVar v
 uses (IR_MemRead _ v) = getVar v
-uses (IR_MemSave v1 v2) = Set.unions (Prelude.map getVar [v1, v2])
+uses (IR_MemSave v1 v2 _) = Set.unions (Prelude.map getVar [v1, v2])
 uses (IR_Call _ v xs) = Set.unions ((getVar v):(Prelude.map getVar xs))
 uses (IR_VoidCall v xs) = Set.unions ((getVar v):(Prelude.map getVar xs))
 uses (IR_Return v) = getVar v

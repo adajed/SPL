@@ -27,7 +27,7 @@ noMemSave :: [IR] -> IR -> IR -> Bool
 noMemSave xs x1 x2 = h xs 0
     where h [] _ = False
           h (y:ys) 0 = h ys (if x1 == y then 1 else 0)
-          h ((IR_MemSave _ _):ys) 1 = False
+          h ((IR_MemSave _ _ _):ys) 1 = False
           h (y:ys) 1 = if y == x2 then True else h ys 1
 
 eliminate :: [IR] -> (IR, IR) -> [IR]

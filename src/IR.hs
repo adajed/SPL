@@ -12,12 +12,17 @@ instance Show Var where
     show (VarC name n) = show name ++ "__" ++ show n
     show (VarA n) = "arg" ++ show n
 
-data ValIR = VarIR Var
+data SVar = SVar Var Int
+    deriving (Eq, Ord)
+instance Show SVar where
+    show (SVar v size) = show v ++ ":" ++ show size
+
+
+data ValIR = VarIR SVar
            | IntIR Int
            | BoolIR Bool
            | VoidIR
            | LabelIR Ident
-           | ArgIR Int
     deriving (Eq)
 instance Show ValIR where
     show (VarIR var) = show var
@@ -25,7 +30,6 @@ instance Show ValIR where
     show (BoolIR b)  = show b
     show (VoidIR) = "void"
     show (LabelIR label) = show label
-    show (ArgIR n) = "arg" ++ show n
 
 data IBinOp = IAdd | ISub | IMul | IDiv | IMod | ILshift | IRshift | IBitAnd | IBitOr | IBitXor
     deriving (Eq)
@@ -82,19 +86,19 @@ instance Show UnOp where
     show (UOpBool op) = show op
 
 data IR = IR_Label Ident                    -- label
-        | IR_Ass Var ValIR                  -- assignment
-        | IR_BinOp BinOp Var ValIR ValIR    -- binary op
-        | IR_UnOp UnOp Var ValIR          -- unary op
-        | IR_MemRead Var ValIR           -- memory read
-        | IR_MemSave ValIR ValIR            -- memory save
-        | IR_Call Var ValIR [ValIR]         -- call function
+        | IR_Ass SVar ValIR                  -- assignment
+        | IR_BinOp BinOp SVar ValIR ValIR    -- binary op
+        | IR_UnOp UnOp SVar ValIR          -- unary op
+        | IR_MemRead SVar ValIR             -- memory read
+        | IR_MemSave ValIR ValIR Int        -- memory save
+        | IR_Call SVar ValIR [ValIR]         -- call function
         | IR_VoidCall ValIR [ValIR]         -- void call
         | IR_Return ValIR                   -- return value from function
         | IR_Jump Ident
         | IR_CondJump ValIR RelOp ValIR Ident
-        | IR_Phi Var [(Int, ValIR)]       -- phi function (for SSA)
+        | IR_Phi SVar [(Int, ValIR)]       -- phi function (for SSA)
         | IR_Nop                          -- no op
-        | IR_Argument Var                 -- argument from function
+        | IR_Argument SVar                 -- argument from function
         deriving (Eq)
 instance Show IR where
     show ir = case ir of
@@ -103,7 +107,7 @@ instance Show IR where
                 IR_BinOp op x v1 v2     -> c [show x, "=", show v1, show op, show v2]
                 IR_UnOp op x v          -> c [show x, "=", show op, show v]
                 IR_MemRead x v          -> c [show x, "=", "*", show v]
-                IR_MemSave d s          -> c ["*", show d, "=", show s]
+                IR_MemSave d s n        -> c ["*", show d, "=", show s, "(", show n, ")"]
                 IR_Call y f xs          -> c [show y, "=", "call", show f, show xs]
                 IR_VoidCall f xs        -> c ["call", show f, show xs]
                 IR_Return v             -> c ["return", show v]

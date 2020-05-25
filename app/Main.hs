@@ -59,7 +59,7 @@ printCode (name, xs) = do
 
 
 
-compileProgram :: ParseFun (Program ()) -> String -> Err (Map Ident [Code])
+compileProgram :: ParseFun (Program ()) -> String -> Err (Map Ident BBGraph)
 compileProgram parser fileContent = do
     let abstractTree = myLLexer fileContent
     program <- parser abstractTree
@@ -68,7 +68,7 @@ compileProgram parser fileContent = do
     code <- runGenerateIR program
     let bbgraphs = Map.map optimizeCode code
     let code = Map.map (genCode . layoutBBGraph) bbgraphs
-    return code
+    return bbgraphs
 
 optimizeCode :: [IR] -> BBGraph
 optimizeCode =  removePhi .
@@ -85,7 +85,7 @@ run parser filepath = do
           hPutStrLn stderr errorMsg
           exitFailure
       Ok code -> do
-          mapM_ printCode (Map.assocs code)
+          mapM_ printBBGraph (Map.assocs code)
           exitSuccess
 
 main :: IO ()

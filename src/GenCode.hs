@@ -33,12 +33,11 @@ getVar x = do
       Nothing -> fail ("Cannot find " ++ show x)
 
 toVal :: ValIR -> GenCode Val
-toVal (VarIR x) =  getVar x
+toVal (VarIR (SVar var size)) =  getVar var
 toVal (IntIR n) = return (VInt n DWord)
 toVal (BoolIR True) = return (VInt 1 DWord)
 toVal (BoolIR False) = return (VInt 0 DWord)
 toVal (LabelIR label) = return (VLabel label)
-toVal (ArgIR _) = return (VReg ax DWord)
 
 varToVal :: Var -> Val
 varToVal _ = reg
@@ -53,20 +52,26 @@ getMem v = return v
 reg :: Val
 reg = VReg ax DWord
 
-tryAllocVar :: Var -> GenCode ()
-tryAllocVar x = do
+getSize :: Int -> Size
+getSize 1 = Byte
+getSize 2 = Word
+getSize 4 = DWord
+getSize 8 = QWord
+getSize _ = DWord
+
+tryAllocVar :: SVar -> GenCode ()
+tryAllocVar (SVar var size) = do
     m <- gets varAddress
-    case (m !? x) of
+    case (m !? var) of
       Just _ -> return ()
       Nothing -> (do
                  n <- gets offset
-                 let v = VMem sp (-n) DWord
-                 let m' = Map.insert x v m
-                 modify (\s -> s { varAddress = m', offset = n + 4 }))
+                 let v = VMem sp (-n) (getSize size)
+                 let m' = Map.insert var v m
+                 modify (\s -> s { varAddress = m', offset = n + size }))
 
 allocValue :: ValIR -> GenCode ()
-allocValue (VarIR x) = tryAllocVar x
-allocValue (ArgIR n) = tryAllocVar (VarA n)
+allocValue (VarIR var) = tryAllocVar var
 allocValue _ = return ()
 
 allocVar :: IR -> GenCode ()
@@ -83,7 +88,7 @@ allocVar (IR_UnOp _ x v) = do
 allocVar (IR_MemRead x v) = do
     tryAllocVar x
     allocValue v
-allocVar (IR_MemSave v1 v2) = do
+allocVar (IR_MemSave v1 v2 _) = do
     allocValue v1
     allocValue v2
 allocVar (IR_Call x y xs) = do
@@ -108,13 +113,13 @@ rbp, rsp :: Val
 rbp = VReg bp QWord
 rsp = VReg sp QWord
 
-moveToVar :: Var -> Val -> GenCode ()
-moveToVar x v@(VMem _ _ _) = do
-    y <- getVar x
+moveToVar :: SVar -> Val -> GenCode ()
+moveToVar (SVar var size) v@(VMem _ _ _) = do
+    y <- getVar var
     emit (CMov eax v)
     emit (CMov y eax)
-moveToVar x v = do
-    y <- getVar x
+moveToVar (SVar var size) v = do
+    y <- getVar var
     emit (CMov y v)
 
 genCode :: [IR] -> [Code]
@@ -216,16 +221,15 @@ genIR (IR_UnOp (UOpBool BNot) x v) = do
 genIR (IR_MemRead x v) = do
     y <- getMem =<< toVal v
     moveToVar x y
-genIR (IR_MemSave v1 v2) = do
+genIR (IR_MemSave v1 v2 size) = do
     y1 <- getMem =<< toVal v1
     y2 <- toVal v2
     emit (CMov y1 y2)
-genIR (IR_Call x v xs) = do
-    y <- toVal v
-    emit (CCall y)
+genIR (IR_Call x f xs) = do
+    genIR (IR_VoidCall f xs)
     moveToVar x eax
-genIR (IR_VoidCall v xs) = do
-    y <- toVal v
+genIR (IR_VoidCall f xs) = do
+    y <- toVal f
     emit (CCall y)
 genIR (IR_Return v) = do
     y <- toVal v

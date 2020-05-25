@@ -12,7 +12,7 @@ modifyValue f ir =
       IR_BinOp op x v1 v2 -> IR_BinOp op x (f v1) (f v2)
       IR_UnOp op x v -> IR_UnOp op x (f v)
       IR_MemRead x v -> IR_MemRead x (f v)
-      IR_MemSave v1 v2 -> IR_MemSave (f v1) (f v2)
+      IR_MemSave v1 v2 size -> IR_MemSave (f v1) (f v2) size
       IR_Call x v xs -> IR_Call x (f v) (fmap f xs)
       IR_VoidCall v xs -> IR_VoidCall (f v) (fmap f xs)
       IR_Return v -> IR_Return (f v)
@@ -20,7 +20,7 @@ modifyValue f ir =
       IR_Phi x vs -> IR_Phi x (Prelude.map (\(n,v) -> (n, f v)) vs)
       ir' -> ir'
 
-takeVar :: IR -> Maybe Var
+takeVar :: IR -> Maybe SVar
 takeVar (IR_Ass x _) = Just x
 takeVar (IR_BinOp _ x _ _) = Just x
 takeVar (IR_UnOp _ x _) = Just x

@@ -29,7 +29,7 @@ isUsed g ir =
       IR_Phi x _ -> isVarUsed g x
       ir' -> True
 
-isVarUsed :: BBGraph -> Var -> Bool
+isVarUsed :: BBGraph -> SVar -> Bool
 isVarUsed g x = any f (Map.elems (ids g))
     where f (BB _ xs) = any (uses (VarIR x)) xs
 
@@ -40,7 +40,7 @@ uses v ir =
       IR_BinOp _ _ v1 v2    -> v1 == v || v2 == v
       IR_UnOp _ _ v'        -> v == v'
       IR_MemRead _ v'       -> v == v'
-      IR_MemSave v1 v2      -> v1 == v || v2 == v
+      IR_MemSave v1 v2 _    -> v1 == v || v2 == v
       IR_Call _ v' vs'      -> v == v' || any (==v) vs'
       IR_VoidCall v' vs'    -> v == v' || any (==v) vs'
       IR_Return v'          -> v == v'

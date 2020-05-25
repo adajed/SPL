@@ -7,6 +7,7 @@ import Control.Monad.Trans.State
 import Control.Monad.Identity
 
 import Data.Map as Map
+import Data.Set as Set
 
 import Debug.Trace as Trace
 
@@ -14,38 +15,38 @@ import AbsSPL
 import BasicBlock
 import IR
 
-data SSAState = SSAState { varCounter :: Map Ident Int
-                         , lastCounter :: Map Ident Int
+data SSAState = SSAState { vars :: Set SVar
+                         , lastVar :: Map Var Int
+                         , counter :: Int
                          }
 
 type SSA a = StateT SSAState Identity a
 
 initialState :: SSAState
-initialState = SSAState { varCounter = Map.empty
-                        , lastCounter = Map.empty}
+initialState = SSAState { vars = Set.empty
+                        , lastVar = Map.empty
+                        , counter = 1
+                        }
 
-vars :: SSA [Ident]
-vars = liftM Map.keys (gets varCounter)
+getNextCounter :: SSA Int
+getNextCounter = do
+    i <- gets counter
+    modify (\s -> s { counter = i + 1 })
+    return i
 
-incrementNextCnt :: Ident -> SSA ()
-incrementNextCnt x =
-    modify (\s -> s { varCounter = Map.adjust (+1) x (varCounter s) })
+getVarCounter :: Var -> SSA Int
+getVarCounter var = liftM (!var) $ gets lastVar
 
-getNextVarCnt :: Ident -> SSA Int
-getNextVarCnt x = do
-    n <- liftM (!x) $ gets varCounter
-    incrementNextCnt x
-    return n
+incVarCounter :: Var -> SSA ()
+incVarCounter var = do
+    i <- getNextCounter
+    let f = Map.insert var i
+    modify (\s -> s { lastVar = f (lastVar s) })
 
-getCurrentCnt :: Ident -> SSA Int
-getCurrentCnt x = liftM (!x) $ gets lastCounter
-
-addVarIfNew :: Maybe Ident -> SSA ()
+addVarIfNew :: Maybe SVar -> SSA ()
 addVarIfNew Nothing = return ()
-addVarIfNew (Just name) = do
-    map <- gets varCounter
-    unless (Map.member name map) (
-        modify (\s -> s { varCounter = Map.insert name 0 map }))
+addVarIfNew (Just var) =
+    modify (\s -> s { vars = Set.insert var (vars s) })
 
 toSSA :: BBGraph -> BBGraph
 toSSA g = runIdentity (evalStateT (graphToSSA g) initialState)
@@ -62,12 +63,11 @@ graphToSSA g = do
 moveArgsToStart :: BBGraph -> BBGraph
 moveArgsToStart g = g''
     where args = concat (Prelude.map getArgsBB (Map.elems (ids g)))
-          newargs = Prelude.map (\(x, n) -> IR_Ass x (ArgIR n)) (Prelude.zip args [1..])
+          f (v@(SVar _ s), n) = IR_Ass v (VarIR (SVar (VarA n) s))
+          newargs = Prelude.map f (Prelude.zip args [1..])
           getArgsBB (BB _ xs) = concat (Prelude.map getArgsIR xs)
-          getArgsIR (IR_Argument x) = [x]
-          getArgsIR ir = []
-          isArg (IR_Argument _) = True
-          isArg _ = False
+          getArgsIR ir = case ir of { (IR_Argument x) -> [x] ; _ -> [] }
+          isArg ir = case ir of { (IR_Argument x) -> True ; _ -> False }
           removeArgs (BB name xs) = BB name (Prelude.filter (not . isArg) xs)
           g' = g { ids = Map.map removeArgs (ids g) }
           insertArgs (BB name xs) = BB name (newargs ++ xs)
@@ -75,40 +75,36 @@ moveArgsToStart g = g''
 
 setupAllVars :: BBGraph -> SSA ()
 setupAllVars g = mapM_ setupVars (Map.elems (ids g))
-    where setupVars (BB _ xs) = mapM_ addVarIfNew (Prelude.map getVar xs)
+    where setupVars (BB _ xs) = mapM_ (addVarIfNew . getVar) xs
 
-getVar :: IR -> Maybe Ident
-getVar ir =
-    let h :: Var -> Maybe Ident
-        h (VarN name) = Just name
-        h (VarT _) = Nothing
-     in case ir of
-          IR_Ass v _        -> h v
-          IR_BinOp _ v _ _ -> h v
-          IR_UnOp _ v _    -> h v
-          IR_Call v _ _     -> h v
-          _ -> Nothing
+getVar :: IR -> Maybe SVar
+getVar (IR_Ass x _) = Just x
+getVar (IR_BinOp _ x _ _) = Just x
+getVar (IR_UnOp _ x _) = Just x
+getVar (IR_MemRead x _) = Just x
+getVar (IR_Call x _ _) = Just x
+getVar _ = Nothing
 
-adjustPhi :: BBGraph -> Map Int (Map Ident Int) -> BBGraph
+adjustPhi :: BBGraph -> Map Int (Map Var Int) -> BBGraph
 adjustPhi g lastN = g { ids = ids' }
     where ids' = Map.mapWithKey f (ids g)
           f n (BB name xs) = BB name (Prelude.map (p n) xs)
-          p n (IR_Phi (VarC x t) _) = IR_Phi (VarC x t) prevs
+          p n (IR_Phi v@(SVar var size) _) = IR_Phi v prevs
               where prevs = Prelude.map h ((prev g) ! n)
-                    h i = (i, VarIR (VarC x ((lastN ! i) ! x)))
+                    h i = (i, VarIR (SVar (VarT ((lastN ! i) ! var)) size))
           p n ir = ir
 
-basicBlockToSSA :: BasicBlock -> SSA (BasicBlock, Map Ident Int)
+basicBlockToSSA :: BasicBlock -> SSA (BasicBlock, Map Var Int)
 basicBlockToSSA (BB label xs) = do
-    v <- vars
-    modify (\s -> s { lastCounter = Map.empty })
-    let phi x = do
-            n <- getNextVarCnt x
-            modify (\s -> s { lastCounter = Map.insert x n (lastCounter s) })
-            return (IR_Phi (VarC x n) [])
-    xphi <- mapM phi v
+    vs <- liftM Set.toList $ gets vars
+    modify (\s -> s { lastVar = Map.empty })
+    let phi (SVar var size) = do
+            i <- getNextCounter
+            modify (\s -> s { lastVar = Map.insert var i (lastVar s) })
+            return (IR_Phi (SVar (VarT i) size) [])
+    xphi <- mapM phi vs
     xs' <- mapM irToSSA xs
-    m <- gets lastCounter
+    m <- gets lastVar
     return (BB label (xphi ++ xs'), m)
 
 
@@ -145,19 +141,16 @@ irToSSA (IR_Return v) = do
 irToSSA ir = return ir
 
 valueToSSA :: ValIR -> SSA ValIR
-valueToSSA (VarIR (VarN name)) = do
-    n <- liftM (!name) $ gets lastCounter
-    return (VarIR (VarC name n))
+valueToSSA (VarIR (SVar var size)) = do
+    i <- liftM (!var) $ gets lastVar
+    return (VarIR (SVar (VarT i) size))
 valueToSSA v = return v
 
-varToSSA :: Var -> SSA Var
-varToSSA (VarN name) = do
-    m <- gets lastCounter
-    let n = m ! name
-    modify (\s -> s { lastCounter = Map.insert name (n+1) m })
-    incrementNextCnt name
-    return (VarC name (n+1))
-varToSSA v = return v
+varToSSA :: SVar -> SSA SVar
+varToSSA (SVar var size) = do
+    incVarCounter var
+    i <- getVarCounter var
+    return (SVar (VarT i) size)
 
 removePhi :: BBGraph -> BBGraph
 removePhi g = Prelude.foldl f g' phis
@@ -169,7 +162,7 @@ removePhi g = Prelude.foldl f g' phis
           f g (IR_Phi x vs) = insertPhiEquivalence x vs g
           f g _ = g
 
-insertPhiEquivalence :: Var -> [(Int, ValIR)] -> BBGraph -> BBGraph
+insertPhiEquivalence :: SVar -> [(Int, ValIR)] -> BBGraph -> BBGraph
 insertPhiEquivalence x vs g = Prelude.foldl f g vs
     where f g (i, v) = if v == VarIR x then g
                                       else insertAtTheEnd i (IR_Ass x v) g
