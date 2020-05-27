@@ -4,20 +4,25 @@
 ## Features
 - basic types (int, bool)
 - array types
+- structs
 - functions
 - IR as quadruple code
 - optimizations
   + copy propagation
   + dead code elimination
   + constant folding
+  + local common subexpression elimination
+  + arithmentic optimizations
+- generate basic assembler code
 
 TODO:
-- structures
 - classes
 - virtual functions
+- lambda expression
+- algebraic types
 - optmizations
-  + local common subexpression elimination
-  + global common subexpression elimination
-  + arithmentic optimizations
   + strength reduction
-- generate assembler code
+  + global common subexpression elimination
+- assembler code
+  + register allocation
+  + assembler code optimizations
