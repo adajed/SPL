@@ -78,7 +78,7 @@ Class.          Type ::= Ident ;
 
 Array.          Type ::= Type "[]" ;
 
-internal Fun.   Type ::= Type [Type] ;
+Fun.            Type ::= Type "(" [Type] ")" ;
 
 internal Null.  Type ::= ;
 
@@ -122,6 +122,10 @@ EOr.        Expr ::= Expr1 "||" Expr ;
 EObjNew.   Expr ::= "new" Ident ;
 
 EArrNew.   Expr ::= "new" Type "[" Expr "]" ;
+
+EShortLam.  Expr ::= "\\" Type Ident "->" Expr ;
+
+ELongLam.   Expr ::= "\\" Type Ident "->" Stmt ;
 
 
 coercions  Expr 6 ;

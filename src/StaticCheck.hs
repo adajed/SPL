@@ -164,6 +164,18 @@ staticCheck_Expr (EObjNew _ cls) = do
 staticCheck_Expr (EArrNew _ t expr) = do
     assertTypesEqual intT =<< staticCheck_Expr expr
     return (Array () t)
+staticCheck_Expr (EShortLam _ t x expr) = doWithSavedEnv m
+    where m = do
+            declareVar x t
+            exprT <- staticCheck_Expr expr
+            return (Fun () exprT [t])
+staticCheck_Expr (ELongLam _ t x stmt) = doWithSavedEnv m
+    where m = do
+            declareVar x t
+            staticCheck_Stmt stmt
+            return (Fun () voidT [t])
+
+
 
 staticCheck_BinOp :: Expr FData -> Expr FData -> TType -> CheckM TType
 staticCheck_BinOp e1 e2 t = do

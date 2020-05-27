@@ -141,3 +141,17 @@ typedExpr (EArrNew _ argT expr) = do
     let aT = fmap (const ()) argT
     let arrayT = Array () aT
     return (EArrNew arrayT (toVoid argT) exprT, arrayT)
+typedExpr (EShortLam _ t x expr) = doWithSavedEnv m
+    where m = do
+            declareVar x t
+            (expr', exprT) <- typedExpr expr
+            let t' = fmap (const voidT) t
+            let newt = Fun () exprT [fmap (const ()) t]
+            return (EShortLam newt t' x expr', newt)
+typedExpr (ELongLam _ t x stmt) = doWithSavedEnv m
+    where m = do
+            declareVar x t
+            stmt' <- typedExpr_Stmt stmt
+            let t' = fmap (const voidT) t
+            let newt = Fun () voidT [fmap (const ()) t]
+            return (ELongLam newt t' x stmt', newt)
