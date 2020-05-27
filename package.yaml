@@ -25,6 +25,8 @@ dependencies:
 - transformers
 - containers
 - mtl
+- filepath
+- process
 
 library:
   source-dirs: src

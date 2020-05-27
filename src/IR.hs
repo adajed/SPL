@@ -19,14 +19,14 @@ instance Show SVar where
 
 
 data ValIR = VarIR SVar
-           | IntIR Int
+           | IntIR Int Int
            | BoolIR Bool
            | VoidIR
            | LabelIR Ident
     deriving (Eq)
 instance Show ValIR where
     show (VarIR var) = show var
-    show (IntIR n) = show n
+    show (IntIR n size) = show n ++ ":" ++ show size
     show (BoolIR b)  = show b
     show (VoidIR) = "void"
     show (LabelIR label) = show label
@@ -94,6 +94,7 @@ data IR = IR_Label Ident                    -- label
         | IR_Call SVar ValIR [ValIR]         -- call function
         | IR_VoidCall ValIR [ValIR]         -- void call
         | IR_Return ValIR                   -- return value from function
+        | IR_VoidReturn
         | IR_Jump Ident
         | IR_CondJump ValIR RelOp ValIR Ident
         | IR_Phi SVar [(Int, ValIR)]       -- phi function (for SSA)
@@ -111,9 +112,10 @@ instance Show IR where
                 IR_Call y f xs          -> c [show y, "=", "call", show f, show xs]
                 IR_VoidCall f xs        -> c ["call", show f, show xs]
                 IR_Return v             -> c ["return", show v]
+                IR_VoidReturn           -> c ["return"]
                 IR_Jump l               -> c ["jump", show l]
                 IR_CondJump v1 op v2 l  -> c ["if", show v1, show op, show v2, "jump", show l]
-                IR_Phi x vs              -> c [show x, "=", "phi", show vs]
+                IR_Phi x vs             -> c [show x, "=", "phi", show vs]
                 IR_Nop                  -> c ["nop"]
                 IR_Argument x           -> c ["arg", "(", show x, ")"]
             where c = intercalate " "

@@ -11,16 +11,16 @@ constantFolding :: BBGraph -> BBGraph
 constantFolding = mapIR constantFold
 
 constantFold :: IR -> IR
-constantFold (IR_BinOp (BOpInt op) x (IntIR n1) (IntIR n2)) =
-    IR_Ass x (IntIR (calcIBinOp op n1 n2))
+constantFold (IR_BinOp (BOpInt op) x (IntIR n1 s1) (IntIR n2 s2)) =
+    IR_Ass x (IntIR (calcIBinOp op n1 n2) (max s1 s2))
 constantFold (IR_BinOp (BOpBool op) x (BoolIR b1) (BoolIR b2)) =
     IR_Ass x (BoolIR (calcBBinOp op b1 b2))
-constantFold (IR_UnOp (UOpInt op) x (IntIR n)) =
-    IR_Ass x (IntIR (calcIUnOp op n))
+constantFold (IR_UnOp (UOpInt op) x (IntIR n s)) =
+    IR_Ass x (IntIR (calcIUnOp op n) s)
 constantFold (IR_UnOp (UOpBool op) x (BoolIR b)) =
     IR_Ass x (BoolIR (calcBUnOp op b))
 constantFold ir@(IR_CondJump v1 EQU v2 label) = if v1 == v2 then IR_Jump label else ir
-constantFold (IR_CondJump (IntIR n1) op (IntIR n2) label) =
+constantFold (IR_CondJump (IntIR n1 _) op (IntIR n2 _) label) =
     if calcIRelOp op n1 n2 then IR_Jump label else IR_Nop
 constantFold ir = ir
 

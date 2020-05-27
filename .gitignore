@@ -2,3 +2,5 @@
 SPL.cabal
 *~
 *.ir
+examples/*
+!examples/*.spl

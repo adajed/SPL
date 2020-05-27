@@ -41,15 +41,38 @@ void printListInt(ListInt l)
         printInt(l.elem);
         l = l.next;
     }
+
+    return;
+}
+
+ListInt listFromArray(int[] arr, int n)
+{
+    ListInt acc = null;
+    int i = n - 1;
+    while (i >= 0)
+    {
+        ListInt temp = new ListInt;
+        temp.elem = arr[i];
+        temp.next = acc;
+        acc = temp;
+        i--;
+    }
+
+    return acc;
 }
 
 int main()
 {
-    ListInt l = new ListInt;
-    l.elem = 1;
-    l.next = new ListInt;
-    l.next.elem = 2;
-    l.next.next = null;
+    int n = 10;
+    int[] arr = new int[n];
+    int i = 0;
+    while (i < n)
+    {
+        arr[i] = i;
+        i++;
+    }
+
+    ListInt l = listFromArray(arr, n);
 
     printListInt(l);
 

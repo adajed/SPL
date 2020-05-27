@@ -7,8 +7,12 @@ int fib(int n)
 
 int main()
 {
-    int ans = fib(10);
-    printInt(ans);
+    int n = 1;
+    while (n < 20)
+    {
+        printInt(fib(n));
+        n++;
+    }
 
     return 0;
 }

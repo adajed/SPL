@@ -5,7 +5,7 @@ int main()
     {
         int i = 2;
         bool isPrime = true;
-        while (i * i < n)
+        while (i * i <= n)
         {
             if (n % i == 0)
             isPrime = false;
