@@ -4,3 +4,6 @@ SPL.cabal
 *.ir
 examples/*
 !examples/*.spl
+
+lib/runtime.o
+spl
