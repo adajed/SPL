@@ -2,6 +2,7 @@
 SPL.cabal
 *~
 *.ir
+*.bak
 examples/*
 !examples/*.spl
 

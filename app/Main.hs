@@ -6,7 +6,7 @@ import System.Environment ( getArgs, getProgName )
 import System.Exit ( exitFailure, exitSuccess )
 import System.Process
 
-import Control.Monad ( liftM )
+import Control.Monad ( liftM, when )
 
 import Data.Map as Map
 
@@ -16,6 +16,7 @@ import SkelSPL
 import PrintSPL
 import AbsSPL
 
+import ArgParse
 import CodeM
 import Defs ( Pos )
 import ExprTypeCheck ( typeProgram )
@@ -72,24 +73,24 @@ writeCode h (fName, xs) = do
     mapM_ f xs
     hPutStrLn h ""
 
-compileProgram :: ParseFun (Program ()) -> String -> Err (Map Ident [IR], Map Ident [Code])
+compileProgram :: ParseFun (Program a) -> String -> Err (Program (), Map Ident [IR], Map Ident [Code])
 compileProgram parser fileContent = do
     let abstractTree = myLLexer fileContent
-    program <- parser abstractTree
+    program <- liftM (fmap (const ())) $ parser abstractTree
     staticCheck program
     program <- typeProgram program
     code <- runGenerateIR program
     ir <- liftM (Map.map layoutBBGraph) $ mapM optimizeCode code
     let code = Map.map genCode ir
-    return (Map.map fst ir, code)
+    return (fmap (const ()) program, Map.map fst ir, code)
 
 optimizeCode :: [IR] -> Err BBGraph
 optimizeCode code = do
     g <- toSSA (splitIntoBasicBlocks code)
     return (removePhi (optimize g))
 
-run :: ParseFun (Program ()) -> String -> IO ()
-run parser filepath = do
+run :: ParseFun (Program a) -> Bool -> Bool -> String -> IO ()
+run parser bShowTree bSaveIR filepath = do
     hPutStrLn stderr ("Compiling " ++ filepath)
     fileContent <- readFile filepath
     let abstractTree = myLLexer fileContent
@@ -97,14 +98,16 @@ run parser filepath = do
       Bad errorMsg -> do
           hPutStrLn stderr errorMsg
           exitFailure
-      Ok (ir, code) -> do
+      Ok (program, ir, code) -> do
+          when bShowTree (hPutStrLn stdout (show program))
           let fileIR = changeExtension filepath "ir"
           let fileCode = changeExtension filepath "s"
           let fileObj = changeExtension filepath "o"
           let fileOut = removeExtension filepath
-          handleIR <- openFile fileIR WriteMode
-          mapM_ (writeIR handleIR) (Map.assocs ir)
-          hClose handleIR
+          when bSaveIR (do
+              handleIR <- openFile fileIR WriteMode
+              mapM_ (writeIR handleIR) (Map.assocs ir)
+              hClose handleIR)
           handleCode <- openFile fileCode WriteMode
           writeCodeMap handleCode code
           hClose handleCode
@@ -118,4 +121,9 @@ main = do
     [] -> do
         hPutStrLn stderr "Usage: ./spl source-files"
         exitFailure
-    filepaths -> mapM_ (run pProgram) filepaths
+    _ -> do
+        let a = parseArgs args
+        let aShowTree = ArgParse.showTree a
+        let bSaveIR = saveIR a
+        let aFilePaths = filepaths a
+        mapM_ (run pProgram aShowTree bSaveIR) aFilePaths
