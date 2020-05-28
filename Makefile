@@ -14,7 +14,7 @@ grammar: src/AbsSPL.hs
 
 src/AbsSPL.hs : grammar/SPL.cf
 	./scripts/gencfg.sh
-	rm src/*.bak
+	rm -f src/*.bak
 	@sed -i 's/newtype Ident = Ident String deriving (Eq, Ord, Show, Read)/newtype Ident = Ident String deriving (Eq, Ord, Read)/' src/AbsSPL.hs
 	@sed -i '11iinstance Show Ident where' src/AbsSPL.hs
 	@sed -i '12ishow (Ident name) = name' src/AbsSPL.hs

@@ -202,8 +202,10 @@ declareArgFromStack (n, i) size = do
 declareArgFromArg :: Int -> (Reg, Int) -> GenCode Int
 declareArgFromArg i (r, size) = do
     let v = VReg r (getSize size)
-    y <- liftM (!(VarA i)) $ gets varAddress
-    move y v
+    y <- liftM (!?(VarA i)) $ gets varAddress
+    case y of
+      Nothing -> return ()
+      Just var -> move var v
     return (i + 1)
 
 genIR :: IR -> GenCode ()
@@ -299,9 +301,13 @@ genIR (IR_UnOp (UOpBool BNot) x v) = do
 genIR (IR_MemRead x v) = do
     y <- toVal v
     let s = getSize (valIRSize (VarIR x))
-    emit (CMov (VReg ax QWord) y)
-    emit (CMov (VReg ax s) (VMem ax 0 s))
-    moveToVar x (VReg ax s)
+    r1 <- getFreeReg
+    r2 <- getFreeReg
+    emit (CMov (VReg r1 QWord) y)
+    emit (CMov (VReg r2 s) (VMem r1 0 s))
+    moveToVar x (VReg r2 s)
+    freeReg r1
+    freeReg r2
 genIR (IR_MemSave v1 v2 size) = do
     y1 <- getMem (getSize size) =<< toVal v1
     y2 <- toVal v2

@@ -48,11 +48,12 @@ changeExtension filepath ext =
 
 writeIR :: Handle -> (Ident, [IR]) -> IO ()
 writeIR h (fName, xs) = do
-    hPutStrLn h ("; " ++ show fName)
+    hPutStrLn h ("; " ++ show fName ++ "\n")
     hPutStrLn h (show fName ++ ":")
     let f (IR_Label l) = hPutStrLn h (show l ++ ":")
         f ir = hPutStrLn h ("\t" ++ show ir)
     mapM_ f xs
+    hPutStrLn h "\n"
 
 writeCodeMap :: Handle -> Map Ident [Code] -> IO ()
 writeCodeMap h codeMap = do
@@ -84,6 +85,7 @@ compileProgram parser fileContent = do
     let code = Map.map genCode ir
     return (fmap (const ()) program, Map.map fst ir, code)
 
+
 optimizeCode :: [IR] -> Err BBGraph
 optimizeCode code = do
     g <- toSSA (splitIntoBasicBlocks code)
@@ -99,7 +101,7 @@ run parser bShowTree bSaveIR filepath = do
           hPutStrLn stderr errorMsg
           exitFailure
       Ok (program, ir, code) -> do
-          when bShowTree (hPutStrLn stdout (show program))
+          when bShowTree (hPutStrLn stdout (printTree program))
           let fileIR = changeExtension filepath "ir"
           let fileCode = changeExtension filepath "s"
           let fileObj = changeExtension filepath "o"

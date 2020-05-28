@@ -16,3 +16,5 @@ src/ParSPL.hs
 src/PrintSPL.hs
 src/DocSPL.txt
 src/SkelSPL.hs
+
+.gdb_history

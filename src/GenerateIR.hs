@@ -4,9 +4,12 @@ import AbsSPL
 import ErrM
 import IR
 
-import Data.Map as Map
+import FreeVariables ( getFreeVars, substitute )
 
-import Control.Monad ( liftM, unless, void )
+import Data.Map as Map
+import Data.Set as Set
+
+import Control.Monad ( liftM, foldM, when, unless, void )
 import Control.Monad.Trans ( lift )
 
 import Control.Monad.Trans.State
@@ -23,6 +26,8 @@ data SState = SState { tempCounter :: Int
                      , varenv :: Map Ident SVar
                      , output :: Map Ident [IR]
                      , currentOutput :: [IR]
+                     , lambdas :: [(Type T, Ident, [(Type T, Ident)], Stmt T)]
+                     , lambdaCounter :: Int
                      }
 
 type GenerateIR a = StateT SState Err a
@@ -48,7 +53,10 @@ initialSState = SState { tempCounter  = 0
                        , fieldSize = Map.empty
                        , varenv = Map.empty
                        , output = Map.empty
-                       , currentOutput = [] }
+                       , currentOutput = []
+                       , lambdas = []
+                       , lambdaCounter = 0
+                       }
 
 runGenerateIR :: Program T -> Err (Map Ident [IR])
 runGenerateIR program = liftM output $ execStateT m initialSState
@@ -113,6 +121,9 @@ getFreshLabel = do
     modifySState (\s -> s { labelCounter = i + 1 } )
     return $ Ident $ ".L" ++ show i
 
+addLambda :: Type T -> Ident -> [(Type T, Ident)] -> Stmt T -> GenerateIR ()
+addLambda t name args stmt = modify (\s -> s { lambdas = (t, name, args, stmt):(lambdas s) })
+
 defaultValue :: Type a -> ValIR
 defaultValue (Int _) = IntIR 0 4
 defaultValue (Bool _) = BoolIR False
@@ -124,20 +135,34 @@ defaultValue _ = IntIR 0 4
 generateIR_Program :: Program T -> GenerateIR ()
 generateIR_Program (Prog t topdefs) = do
     mapM_ declareTopDef topdefs
-    mapM_ generateIR_TopDef topdefs
+    mapM_ (generateIR_TopDef True) topdefs
+    generateIR_lambda
 
-generateIR_TopDef :: TopDef T -> GenerateIR ()
-generateIR_TopDef (FnDef _ t name args (Bl _ stmts)) = do
+generateIR_lambda :: GenerateIR ()
+generateIR_lambda = do
+    ls <- gets lambdas
+    case ls of
+      [] -> return ()
+      ((t, name, args, stmt):ls) -> do
+                                modify (\s -> s { lambdas = tail (lambdas s) })
+                                let args' = Prelude.map (\(t, x) -> Arg (Void ()) t x) args
+                                generateIR_TopDef False (FnDef (Void ()) t name args' (Bl (Void ()) [stmt]))
+                                generateIR_lambda
+
+generateIR_TopDef :: Bool -> TopDef T -> GenerateIR ()
+generateIR_TopDef addEnv (FnDef _ t name args (Bl _ stmts)) = do
     modifySState (\s -> s { currentOutput = [] } )
     env <- getsSState varenv
     emitIR (IR_Label name)
-    mapM_ declareArg args
+    let envArg = Arg (Void ()) (Void (Void ())) (Ident "")
+    let args' = if addEnv then envArg:args else args
+    mapM_ declareArg args'
     modifySState (\s -> s { levelCounter = (levelCounter s) + 1 } )
     mapM_ generateIR_Stmt stmts
     modifySState (\s -> s { levelCounter = (levelCounter s) - 1
                           , varenv = env
                           , output = Map.insert name ((reverse . currentOutput) s) (output s) } )
-generateIR_TopDef (ClDef _ _ _) = return ()
+generateIR_TopDef _ (ClDef _ _ _) = return ()
 
 declareArg :: Argument T -> GenerateIR ()
 declareArg (Arg _ t name) = do
@@ -231,7 +256,14 @@ generateIR_Expr (EInt _ n) = return (IntIR (fromInteger n) 4)
 generateIR_Expr (ETrue _) = return (BoolIR True)
 generateIR_Expr (EFalse _) = return (BoolIR False)
 generateIR_Expr (ENull _) = return (IntIR 0 8)
-generateIR_Expr (EVar _ name) = liftM VarIR $ getVar name
+generateIR_Expr (EVar _ name) = do
+    e <- gets varenv
+    case e !? name of
+      Just var -> return (VarIR var)
+      Nothing -> do
+                t <- generateIR_Expr_Alloc (EInt (Int ()) 16)
+                emitIR (IR_MemSave t (LabelIR name) 8)
+                return t
 generateIR_Expr (EField _ expr field) =
     case exprType expr of
       Class _ cls -> do
@@ -249,9 +281,13 @@ generateIR_Expr expr@(EArrAcc type_ arr index) = do
     v' <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp (BOpInt IMul) t ind (IntIR size 4))
     loc <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t arrV v')
     liftM VarIR $ emitIR_ToTemp size (\t -> IR_MemRead t loc)
-generateIR_Expr (EApp ty (EVar _ fName) args) = do
+generateIR_Expr (EApp ty fExpr args) = do
+    f <- generateIR_Expr fExpr
     xs <- mapM generateIR_Expr args
-    liftM VarIR $ emitIR_ToTemp (sizeOf ty) (\t -> IR_Call t (LabelIR fName) xs)
+    fPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t f)
+    temp <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t f (IntIR 8 8))
+    envPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t temp)
+    liftM VarIR $ emitIR_ToTemp (sizeOf ty) (\t -> IR_Call t fPtr (envPtr:xs))
 generateIR_Expr (EUnaryOp _ op expr) = generateIR_UnOp op' expr
     where op' = case op of
                   Neg _    -> UOpInt INeg
@@ -276,11 +312,52 @@ generateIR_Expr e@(EAnd _ _ _) = generateIR_BoolExpr e
 generateIR_Expr e@(EOr _ _ _) = generateIR_BoolExpr e
 generateIR_Expr (EObjNew t cls) = do
     size <- liftM (!cls) $ gets classSize
-    let arg1 = EInt (Int ()) (toInteger size)
-    generateIR_Expr (EApp t (EVar t (Ident "allocMemory")) [arg1])
-generateIR_Expr (EArrNew tt t expr) =
-    generateIR_Expr (EApp tt (EVar tt (Ident "allocMemory")) [size])
-        where size = EMul (Int ()) expr (Times tt) (EInt (Int ()) (fromIntegral (sizeOf t)))
+    generateIR_Expr_Alloc (EInt (Int ()) (toInteger size))
+generateIR_Expr (EArrNew tt t expr) = generateIR_Expr_Alloc size
+    where size = EMul (Int ()) expr (Times tt) (EInt (Int ()) (fromIntegral (sizeOf t)))
+generateIR_Expr e@(EShortLam _ t x expr) = do
+    let freeVars = Set.toList (getFreeVars (SExp (Void ()) e))
+    (n, mOffset, mSize) <- foldM buildOffsets (0, Map.empty, Map.empty) freeVars
+    lambdaN <- gets lambdaCounter
+    modify (\s -> s { lambdaCounter = lambdaN + 1 })
+    let envName = Ident ("env__class__" ++ show lambdaN)
+    let env = Ident ("env__" ++ show lambdaN)
+    let lambdaName = Ident ("lambda__" ++ show lambdaN)
+    modify (\s -> s { fieldOffset = Map.insert envName mOffset (fieldOffset s) })
+    modify (\s -> s { fieldSize = Map.insert envName mSize (fieldSize s) })
+    modify (\s -> s { classSize = Map.insert envName n (classSize s) })
+    v <- generateIR_Expr_Alloc (EInt (Int ()) 16)
+    emitIR (IR_MemSave v (LabelIR lambdaName) 8)
+    when (n > 0) (do
+            v1 <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t v (IntIR 8 8))
+            v2 <- generateIR_Expr_Alloc (EInt (Int ()) (fromIntegral n))
+            mapM_ (setupEnv mOffset mSize v2) freeVars
+            emitIR (IR_MemSave v1 v2 8))
+    let stmt = substitute (Class (Void ()) envName) env (Set.fromList freeVars) (Ret (Void ()) expr)
+    addLambda (fmap (const (Void ())) (exprType expr)) lambdaName [(Class (Void ()) envName, env), (t, x)] stmt
+    return v
+
+setupEnv :: Map Ident Offset -> Map Ident Int -> ValIR -> Ident -> GenerateIR ()
+setupEnv mOffset mSize v x = do
+    var <- liftM (!x) $ gets varenv
+    let offset = mOffset ! x
+    let size = mSize ! x
+    t <- liftM VarIR $ emitIR_ToTemp size (\t -> IR_BinOp (BOpInt IAdd) t v (IntIR offset 8))
+    emitIR (IR_MemSave t (VarIR var) size)
+
+generateIR_Expr_Alloc :: Expr T -> GenerateIR ValIR
+generateIR_Expr_Alloc expr = do
+    let fname = LabelIR (Ident "allocMemory")
+    v <- generateIR_Expr expr
+    liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_Call t fname [v])
+
+type ClassInfo = (Int, Map Ident Offset, Map Ident Int)
+buildOffsets :: ClassInfo -> Ident -> GenerateIR ClassInfo
+buildOffsets (n, mOffset, mSize) x = do
+    var <- liftM (!x) $ gets varenv
+    case var of
+      SVar _ i -> return (n + i, Map.insert x n mOffset, Map.insert x i mSize)
+
 
 generateIR_UnOp :: UnOp -> Expr T -> GenerateIR ValIR
 generateIR_UnOp op expr = do
@@ -368,3 +445,4 @@ exprType (EAnd t _ _) = t
 exprType (EOr t _ _) = t
 exprType (EObjNew t _) = t
 exprType (EArrNew t _ _) = t
+
