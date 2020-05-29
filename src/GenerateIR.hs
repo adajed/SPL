@@ -282,8 +282,8 @@ generateIR_Expr expr@(EArrAcc type_ arr index) = do
     loc <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t arrV v')
     liftM VarIR $ emitIR_ToTemp size (\t -> IR_MemRead t loc)
 generateIR_Expr (EApp ty fExpr args) = do
-    f <- generateIR_Expr fExpr
     xs <- mapM generateIR_Expr args
+    f <- generateIR_Expr fExpr
     fPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t f)
     temp <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t f (IntIR 8 8))
     envPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t temp)

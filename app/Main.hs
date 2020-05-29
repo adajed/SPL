@@ -19,7 +19,6 @@ import AbsSPL
 import ArgParse
 import CodeM
 import Defs ( Pos )
-import ExprTypeCheck ( typeProgram )
 import GenerateIR ( runGenerateIR )
 import GenCode ( genCode )
 import ErrM
