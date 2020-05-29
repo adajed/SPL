@@ -2,9 +2,9 @@ module IR where
 
 import Data.List ( intercalate )
 
-import AbsSPL ( Ident )
+import AbsSPL ( VIdent )
 
-data Var = VarN Ident | VarT Int | VarC Ident Int | VarA Int
+data Var = VarN VIdent | VarT Int | VarC VIdent Int | VarA Int
     deriving (Eq, Ord)
 instance Show Var where
     show (VarN name) = show name
@@ -22,7 +22,7 @@ data ValIR = VarIR SVar
            | IntIR Int Int
            | BoolIR Bool
            | VoidIR
-           | LabelIR Ident
+           | LabelIR VIdent
     deriving (Eq)
 instance Show ValIR where
     show (VarIR var) = show var
@@ -85,7 +85,7 @@ instance Show UnOp where
     show (UOpInt op) = show op
     show (UOpBool op) = show op
 
-data IR = IR_Label Ident                    -- label
+data IR = IR_Label VIdent                    -- label
         | IR_Ass SVar ValIR                  -- assignment
         | IR_BinOp BinOp SVar ValIR ValIR    -- binary op
         | IR_UnOp UnOp SVar ValIR          -- unary op
@@ -95,8 +95,8 @@ data IR = IR_Label Ident                    -- label
         | IR_VoidCall ValIR [ValIR]         -- void call
         | IR_Return ValIR                   -- return value from function
         | IR_VoidReturn
-        | IR_Jump Ident
-        | IR_CondJump ValIR RelOp ValIR Ident
+        | IR_Jump VIdent
+        | IR_CondJump ValIR RelOp ValIR VIdent
         | IR_Phi SVar [(Int, ValIR)]       -- phi function (for SSA)
         | IR_Nop                          -- no op
         | IR_Argument SVar                 -- argument from function

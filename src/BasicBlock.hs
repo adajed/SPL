@@ -5,7 +5,7 @@ import Data.Map as Map
 import AbsSPL
 import IR
 
-data BasicBlock = BB Ident [IR]
+data BasicBlock = BB VIdent [IR]
     deriving (Eq)
 
 data BBGraph = G { ids :: Map Int BasicBlock
@@ -22,10 +22,10 @@ splitIntoBasicBlocks ir = buildBBGraph (h [] 0 ir)
             where (name, bb, xs', n') = getBasicBlock xs n
 
 
-getBasicBlock :: [IR] -> Int -> (Ident, [IR], [IR], Int)
+getBasicBlock :: [IR] -> Int -> (VIdent, [IR], [IR], Int)
 getBasicBlock ((IR_Label name):xs) n = (name, reverse bb, xs', n)
     where (bb, xs') = getBasicBlock' xs []
-getBasicBlock xs n = (Ident (".temp" ++ show n), reverse bb, xs', n + 1)
+getBasicBlock xs n = (VIdent (".temp" ++ show n), reverse bb, xs', n + 1)
     where (bb, xs') = getBasicBlock' xs []
 
 getBasicBlock' :: [IR] -> [IR] -> ([IR], [IR])
@@ -38,9 +38,9 @@ getBasicBlock' (ir:xs) ys = getBasicBlock' xs (ir:ys)
 
 buildBBGraph :: [BasicBlock] -> BBGraph
 buildBBGraph bbs = G { ids = ids', next = next', prev = prev', layout = layout', args = args' }
-    where bbs' = [BB (Ident "__START__") []] ++ bbs ++ [BB (Ident "__END__") []]
+    where bbs' = [BB (VIdent "__START__") []] ++ bbs ++ [BB (VIdent "__END__") []]
           ids' = Map.fromList (zip [1..] bbs')
-          n i (BB name _) = if name == Ident "__END__" then Nothing else Just (i + 1)
+          n i (BB name _) = if name == VIdent "__END__" then Nothing else Just (i + 1)
           layout' = Map.mapWithKey n ids'
           ids_rev = Map.fromList (zip (Prelude.map (\(BB name _) -> name) bbs') [1..])
           next' = Map.fromList (zip [1..] (Prelude.map (getNext ids_rev) bbs'))
@@ -48,7 +48,7 @@ buildBBGraph bbs = G { ids = ids', next = next', prev = prev', layout = layout',
           takeArg ir = case ir of { IR_Argument (SVar _ s) -> [s] ; _ -> [] }
           args' = concat (Prelude.map (\(BB _ xs) -> concat (Prelude.map takeArg xs)) bbs)
 
-getNext :: Map Ident Int -> BasicBlock -> [Int]
+getNext :: Map VIdent Int -> BasicBlock -> [Int]
 getNext ids (BB name []) =
     let n = ids ! name
      in if n < (size ids) then [n+1] else []
@@ -61,7 +61,7 @@ getNext ids (BB name xs) =
           IR_Return _ -> [size ids]
           _ -> next
 
-getPrev :: Map Ident Int -> Map Int [Int] -> BasicBlock -> [Int]
+getPrev :: Map VIdent Int -> Map Int [Int] -> BasicBlock -> [Int]
 getPrev ids next (BB name _) =
     let n = ids ! name
         next' = Map.toList next

@@ -7,35 +7,35 @@ import Data.Set as Set
 import Control.Monad.Trans.State
 import Control.Monad.Identity
 
-data SState = SState { usedVars :: Set Ident
-                     , envName :: Ident
+data SState = SState { usedVars :: Set VIdent
+                     , envName :: VIdent
                      , envType :: Type T
                      }
 
 type GenM a = StateT SState Identity a
 
-getFreeVars :: Stmt T -> Set Ident
+getFreeVars :: Stmt T -> Set VIdent
 getFreeVars stmt = runIdentity (evalStateT m initState)
     where m = calcFreeVars stmt
           initState = SState { usedVars = Set.empty
-                             , envName = Ident ""
+                             , envName = VIdent ""
                              , envType = Void (Void ())
                              }
 
-addVar :: Ident -> GenM ()
+addVar :: VIdent -> GenM ()
 addVar x = modify (\s -> s { usedVars = f (usedVars s) })
     where f = Set.insert x
 
-removeVar :: Ident -> GenM ()
+removeVar :: VIdent -> GenM ()
 removeVar x = modify (\s -> s { usedVars = f (usedVars s) })
     where f = Set.delete x
 
-checkVar :: Ident -> GenM Bool
+checkVar :: VIdent -> GenM Bool
 checkVar x = liftM (Set.member x) $ gets usedVars
 
 type T = Type ()
 
-calcFreeVars :: Stmt T -> GenM (Set Ident)
+calcFreeVars :: Stmt T -> GenM (Set VIdent)
 calcFreeVars (Empty _) = return Set.empty
 calcFreeVars (BStmt _ (Bl _ stmts)) = do
     set <- gets usedVars
@@ -66,7 +66,7 @@ calcFreeVars (While _ expr stmt) = do
     return (Set.union s1 s2)
 calcFreeVars (SExp _ expr) = calcFreeVars_Expr expr
 
-calcFreeVars_Item :: Item T -> GenM (Set Ident)
+calcFreeVars_Item :: Item T -> GenM (Set VIdent)
 calcFreeVars_Item  (NoInit _ name) = do
     addVar name
     return Set.empty
@@ -75,7 +75,7 @@ calcFreeVars_Item (Init _ name expr) = do
     addVar name
     return f
 
-calcFreeVars_Expr :: Expr T -> GenM (Set Ident)
+calcFreeVars_Expr :: Expr T -> GenM (Set VIdent)
 calcFreeVars_Expr (ENull _) = return Set.empty
 calcFreeVars_Expr (EInt _ _) = return Set.empty
 calcFreeVars_Expr (ETrue _) = return Set.empty
@@ -108,27 +108,21 @@ calcFreeVars_Expr (EAnd _ expr1 expr2) =
 calcFreeVars_Expr (EObjNew _ _) = return Set.empty
 calcFreeVars_Expr (EArrNew _ _ expr) =
     calcFreeVars_Expr expr
-calcFreeVars_Expr (EShortLam _ _ name expr) = do
+calcFreeVars_Expr (ELambda _ args stmt) = do
     set <- gets usedVars
-    addVar name
-    s <- calcFreeVars_Expr expr
-    modify (\s -> s { usedVars = set })
-    return s
-calcFreeVars_Expr (ELongLam _ _ name stmt) = do
-    set <- gets usedVars
-    addVar name
+    mapM_ (\(Arg _ _ name) -> addVar name) args
     s <- calcFreeVars stmt
     modify (\s -> s { usedVars = set })
     return s
 
 
-calcFreeVars_Expr2 :: Expr T -> Expr T -> GenM (Set Ident)
+calcFreeVars_Expr2 :: Expr T -> Expr T -> GenM (Set VIdent)
 calcFreeVars_Expr2 expr1 expr2 = do
     s1 <- calcFreeVars_Expr expr1
     s2 <- calcFreeVars_Expr expr2
     return (Set.union s1 s2)
 
-substitute :: Type T -> Ident -> Set Ident -> Stmt T -> Stmt T
+substitute :: Type T -> VIdent -> Set VIdent -> Stmt T -> Stmt T
 substitute ty name vars stmt = runIdentity (evalStateT m initState)
     where m = substitute_Stmt stmt
           initState = SState { usedVars = vars

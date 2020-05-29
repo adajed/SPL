@@ -59,7 +59,7 @@ showReg QWord (RegN n) = "r" ++ show n
 data Val = VInt Int Size
          | VReg Reg Size
          | VMem Reg Int Size
-         | VLabel Ident
+         | VLabel VIdent
          deriving (Eq)
 instance Show Val where
     show (VInt n size)   = show size ++ " " ++ show n

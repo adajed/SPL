@@ -19,16 +19,16 @@ boolT = Bool ()
 voidT = Void ()
 nullT = Null ()
 
-type VarEnv = Map Ident TType
+type VarEnv = Map VIdent TType
 
 data SState = SState { rettype :: TType
                      , varenv :: VarEnv
-                     , fields :: Map Ident (Map Ident TType) }
+                     , fields :: Map CIdent (Map VIdent TType) }
 
 type CheckM a = StateT SState Err a
 
 initialEnv :: VarEnv
-initialEnv = Map.fromList [(Ident "printInt", Fun () voidT [intT])]
+initialEnv = Map.fromList [(VIdent "printInt", Fun () voidT [intT])]
 
 runCheckM :: CheckM a -> Err a
 runCheckM m = evalStateT m initialSState
@@ -36,7 +36,7 @@ runCheckM m = evalStateT m initialSState
                                  , varenv = initialEnv
                                  , fields = Map.empty }
 
-getVariableType :: FData -> Ident -> CheckM TType
+getVariableType :: FData -> VIdent -> CheckM TType
 getVariableType pos name = do
     env <- gets varenv
     case env !? name of
@@ -46,7 +46,7 @@ getVariableType pos name = do
 getReturnType :: CheckM TType
 getReturnType = gets rettype
 
-declareVar :: Ident -> TType -> CheckM ()
+declareVar :: VIdent -> TType -> CheckM ()
 declareVar name t =
     modify (\s -> s { varenv = Map.insert name t (varenv s) } )
 

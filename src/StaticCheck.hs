@@ -31,7 +31,7 @@ tryGetFunctionType :: TType -> CheckM (TType, [TType])
 tryGetFunctionType (Fun _ retType argTypes) = return (retType, argTypes)
 tryGetFunctionType  _ = errorMsg () "Type is not function"
 
-tryGetClassName :: TType -> CheckM Ident
+tryGetClassName :: TType -> CheckM CIdent
 tryGetClassName (Class _ cls) = return cls
 tryGetClassName _ = errorMsg () "Type is not a class"
 
@@ -164,16 +164,17 @@ staticCheck_Expr (EObjNew _ cls) = do
 staticCheck_Expr (EArrNew _ t expr) = do
     assertTypesEqual intT =<< staticCheck_Expr expr
     return (Array () t)
-staticCheck_Expr (EShortLam _ t x expr) = doWithSavedEnv m
+-- staticCheck_Expr (EShortLam _ t x expr) = doWithSavedEnv m
+--     where m = do
+--             declareVar x t
+--             exprT <- staticCheck_Expr expr
+--             return (Fun () exprT [t])
+staticCheck_Expr (ELambda _ args stmt) = doWithSavedEnv m
     where m = do
-            declareVar x t
-            exprT <- staticCheck_Expr expr
-            return (Fun () exprT [t])
-staticCheck_Expr (ELongLam _ t x stmt) = doWithSavedEnv m
-    where m = do
-            declareVar x t
+            mapM_ (\(Arg _ t x) -> declareVar x t) args
             staticCheck_Stmt stmt
-            return (Fun () voidT [t])
+            let ts = Prelude.map (\(Arg _ t _) -> t) args
+            return (Fun () voidT ts)
 
 
 
