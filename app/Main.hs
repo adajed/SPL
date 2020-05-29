@@ -78,9 +78,8 @@ compileProgram :: ParseFun (Program a) -> String -> Err (Program (), Map VIdent 
 compileProgram parser fileContent = do
     let abstractTree = myLLexer fileContent
     program <- liftM (fmap (const ())) $ parser abstractTree
-    staticCheck program
-    program <- typeProgram program
-    code <- runGenerateIR program
+    program' <- staticCheck program
+    code <- runGenerateIR program'
     ir <- liftM (Map.map layoutBBGraph) $ mapM optimizeCode code
     let code = Map.map genCode ir
     return (fmap (const ()) program, Map.map fst ir, code)

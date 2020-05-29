@@ -217,17 +217,11 @@ substitute_Expr (EOr t e1 e2) = do
 substitute_Expr (EArrNew t ty e) = do
     e' <- substitute_Expr e
     return (EArrNew t ty e')
--- substitute_Expr (EShortLam t ty x e) = do
---     set <- gets usedVars
---     removeVar x
---     e' <- substitute_Expr e
---     modify (\s -> s { usedVars = set })
---     return (EShortLam t ty x e')
--- substitute_Expr (ELongLam t ty x s) = do
---     set <- gets usedVars
---     removeVar x
---     s' <- substitute_Stmt s
---     modify (\s -> s { usedVars = set })
---     return (ELongLam t ty x s')
+substitute_Expr (ELambda t args stmt) = do
+    set <- gets usedVars
+    mapM_ (\(Arg _ _ x) -> removeVar x) args
+    stmt' <- substitute_Stmt stmt
+    modify (\s -> s { usedVars = set })
+    return (ELambda t args stmt')
 substitute_Expr expr = return expr
 

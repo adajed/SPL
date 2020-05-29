@@ -26,7 +26,7 @@ data SState = SState { tempCounter :: Int
                      , varenv :: Map VIdent SVar
                      , output :: Map VIdent [IR]
                      , currentOutput :: [IR]
-                     , lambdas :: [(Type T, VIdent, [(Type T, VIdent)], Stmt T)]
+                     , lambdas :: [(Type T, VIdent, [Argument T], Stmt T)]
                      , lambdaCounter :: Int
                      }
 
@@ -112,8 +112,9 @@ generateOffsets args = Prelude.foldl h (0, [], []) args
 getVar :: VIdent -> GenerateIR SVar
 getVar name = do
     env <- getsSState varenv
-    unless (Map.member name env) (fail ("Variable not declared: " ++ show name))
-    return (env ! name)
+    case env !? name of
+      Nothing -> fail ("Variable not declared: " ++ show name)
+      Just x -> return x
 
 getFreshLabel :: GenerateIR VIdent
 getFreshLabel = do
@@ -121,7 +122,7 @@ getFreshLabel = do
     modifySState (\s -> s { labelCounter = i + 1 } )
     return $ VIdent $ ".L" ++ show i
 
-addLambda :: Type T -> VIdent -> [(Type T, VIdent)] -> Stmt T -> GenerateIR ()
+addLambda :: Type T -> VIdent -> [Argument T] -> Stmt T -> GenerateIR ()
 addLambda t name args stmt = modify (\s -> s { lambdas = (t, name, args, stmt):(lambdas s) })
 
 defaultValue :: Type a -> ValIR
@@ -145,8 +146,7 @@ generateIR_lambda = do
       [] -> return ()
       ((t, name, args, stmt):ls) -> do
                                 modify (\s -> s { lambdas = tail (lambdas s) })
-                                let args' = Prelude.map (\(t, x) -> Arg (Void ()) t x) args
-                                generateIR_TopDef False (FnDef (Void ()) t name args' (Bl (Void ()) [stmt]))
+                                generateIR_TopDef False (FnDef (Void ()) t name args (Bl (Void ()) [stmt]))
                                 generateIR_lambda
 
 generateIR_TopDef :: Bool -> TopDef T -> GenerateIR ()
@@ -269,8 +269,8 @@ generateIR_Expr (EField _ expr field) =
       Class _ cls -> do
             x <- generateIR_Expr expr
             offset <- liftM ((!field) . (!cls)) $ gets fieldOffset
-            y <- emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t x (IntIR offset 8))
             size <- liftM ((!field) . (!cls)) $ gets fieldSize
+            y <- emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t x (IntIR offset 8))
             z <- emitIR_ToTemp size (\t -> IR_MemRead t (VarIR y))
             return (VarIR z)
       _ -> fail "error"
@@ -315,27 +315,29 @@ generateIR_Expr (EObjNew t cls) = do
     generateIR_Expr_Alloc (EInt (Int ()) (toInteger size))
 generateIR_Expr (EArrNew tt t expr) = generateIR_Expr_Alloc size
     where size = EMul (Int ()) expr (Times tt) (EInt (Int ()) (fromIntegral (sizeOf t)))
--- generateIR_Expr e@(EShortLam _ t x expr) = do
---     let freeVars = Set.toList (getFreeVars (SExp (Void ()) e))
---     (n, mOffset, mSize) <- foldM buildOffsets (0, Map.empty, Map.empty) freeVars
---     lambdaN <- gets lambdaCounter
---     modify (\s -> s { lambdaCounter = lambdaN + 1 })
---     let envName = CIdent ("env__class__" ++ show lambdaN)
---     let env = VIdent ("env__" ++ show lambdaN)
---     let lambdaName = VIdent ("lambda__" ++ show lambdaN)
---     modify (\s -> s { fieldOffset = Map.insert envName mOffset (fieldOffset s) })
---     modify (\s -> s { fieldSize = Map.insert envName mSize (fieldSize s) })
---     modify (\s -> s { classSize = Map.insert envName n (classSize s) })
---     v <- generateIR_Expr_Alloc (EInt (Int ()) 16)
---     emitIR (IR_MemSave v (LabelIR lambdaName) 8)
---     when (n > 0) (do
---             v1 <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t v (IntIR 8 8))
---             v2 <- generateIR_Expr_Alloc (EInt (Int ()) (fromIntegral n))
---             mapM_ (setupEnv mOffset mSize v2) freeVars
---             emitIR (IR_MemSave v1 v2 8))
---     let stmt = substitute (Class (Void ()) envName) env (Set.fromList freeVars) (Ret (Void ()) expr)
---     addLambda (fmap (const (Void ())) (exprType expr)) lambdaName [(Class (Void ()) envName, env), (t, x)] stmt
---     return v
+generateIR_Expr e@(ELambda ty args stmt) = do
+    let freeVars = Set.toList (getFreeVars (Ret (Void ()) e))
+    (n, mOffset, mSize) <- foldM buildOffsets (0, Map.empty, Map.empty) freeVars
+    lambdaN <- gets lambdaCounter
+    modify (\s -> s { lambdaCounter = lambdaN + 1 })
+    let envName = CIdent ("env__class__" ++ show lambdaN)
+    let env = VIdent ("__env__" ++ show lambdaN)
+    let lambdaName = VIdent ("__lambda__" ++ show lambdaN)
+    modify (\s -> s { fieldOffset = Map.insert envName mOffset (fieldOffset s) })
+    modify (\s -> s { fieldSize = Map.insert envName mSize (fieldSize s) })
+    modify (\s -> s { classSize = Map.insert envName n (classSize s) })
+    v <- generateIR_Expr_Alloc (EInt (Int ()) 16)
+    emitIR (IR_MemSave v (LabelIR lambdaName) 8)
+    when (n > 0) (do
+            v1 <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t v (IntIR 8 8))
+            v2 <- generateIR_Expr_Alloc (EInt (Int ()) (fromIntegral n))
+            mapM_ (setupEnv mOffset mSize v2) freeVars
+            emitIR (IR_MemSave v1 v2 8))
+    let envType = Class (Void ()) envName
+    let stmt' = substitute envType env (Set.fromList freeVars) stmt
+    let tOut = case ty of { Fun _ t _ -> fmap (const (Void ())) t; _ -> Void (Void ()) }
+    addLambda tOut lambdaName ((Arg (Void ()) envType env):args) stmt'
+    return v
 
 setupEnv :: Map VIdent Offset -> Map VIdent Int -> ValIR -> VIdent -> GenerateIR ()
 setupEnv mOffset mSize v x = do
