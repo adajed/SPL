@@ -38,13 +38,12 @@ getBasicBlock' (ir:xs) ys = getBasicBlock' xs (ir:ys)
 
 buildBBGraph :: [BasicBlock] -> BBGraph
 buildBBGraph bbs = G { ids = ids', next = next', prev = prev', layout = layout', args = args' }
-    where bbs' = [BB (VIdent "__START__") []] ++ bbs ++ [BB (VIdent "__END__") []]
-          ids' = Map.fromList (zip [1..] bbs')
-          n i (BB name _) = if name == VIdent "__END__" then Nothing else Just (i + 1)
-          layout' = Map.mapWithKey n ids'
-          ids_rev = Map.fromList (zip (Prelude.map (\(BB name _) -> name) bbs') [1..])
-          next' = Map.fromList (zip [1..] (Prelude.map (getNext ids_rev) bbs'))
-          prev' = Map.fromList (zip [1..] (Prelude.map (getPrev ids_rev next') bbs'))
+    where ids' = Map.fromList (zip [1..] bbs)
+          n = length bbs
+          layout' = Map.mapWithKey (\i _ -> if i == n then Nothing else Just (i+1)) ids'
+          ids_rev = Map.fromList (zip (Prelude.map (\(BB name _) -> name) bbs) [1..])
+          next' = Map.fromList (zip [1..] (Prelude.map (getNext ids_rev) bbs))
+          prev' = Map.fromList (zip [1..] (Prelude.map (getPrev ids_rev next') bbs))
           takeArg ir = case ir of { IR_Argument (SVar _ s) -> [s] ; _ -> [] }
           args' = concat (Prelude.map (\(BB _ xs) -> concat (Prelude.map takeArg xs)) bbs)
 
@@ -58,7 +57,7 @@ getNext ids (BB name xs) =
      in case last xs of
           IR_Jump label -> [ids ! label]
           IR_CondJump _ _ _ label -> (ids ! label):next
-          IR_Return _ -> [size ids]
+          IR_Return _ -> []
           _ -> next
 
 getPrev :: Map VIdent Int -> Map Int [Int] -> BasicBlock -> [Int]
@@ -67,12 +66,14 @@ getPrev ids next (BB name _) =
         next' = Map.toList next
      in Prelude.map fst (Prelude.filter ((elem n) . snd) next')
 
-layoutBBGraph :: BBGraph -> ([IR], [Int])
-layoutBBGraph g = (middle (concat (Prelude.map h (l 1 []))), args g)
-    where h i = f ((ids g) ! i)
-          f (BB name xs) = (IR_Label name):xs
+flattenBBGraph :: BBGraph -> [BasicBlock]
+flattenBBGraph g = Prelude.map ((ids g) !) (l 1 [])
+    where l :: Int -> [Int] -> [Int]
           l i acc = case ((layout g) ! i) of
                       Just j -> l j (i:acc)
                       Nothing -> reverse (i:acc)
-          middle xs = tail (tail (init xs))
 
+layoutBBGraph :: BBGraph -> ([IR], [Int])
+layoutBBGraph g = (tail (f (flattenBBGraph g)), args g)
+    where f :: [BasicBlock] -> [IR]
+          f bbs = concat (Prelude.map (\(BB name xs) -> (IR_Label name):xs) bbs)

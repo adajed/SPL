@@ -15,10 +15,14 @@ grammar: src/AbsSPL.hs
 src/AbsSPL.hs : grammar/SPL.cf
 	./scripts/gencfg.sh
 	rm -f src/*.bak
-	@sed -i 's/newtype Ident = Ident String deriving (Eq, Ord, Show, Read)/newtype Ident = Ident String deriving (Eq, Ord, Read)/' src/AbsSPL.hs
-	@sed -i '11iinstance Show Ident where' src/AbsSPL.hs
-	@sed -i '12ishow (Ident name) = name' src/AbsSPL.hs
+	@sed -i 's/newtype CIdent = CIdent String deriving (Eq, Ord, Show, Read)/newtype CIdent = CIdent String deriving (Eq, Ord, Read)/' src/AbsSPL.hs
+	@sed -i 's/newtype VIdent = VIdent String deriving (Eq, Ord, Show, Read)/newtype VIdent = VIdent String deriving (Eq, Ord, Read)/' src/AbsSPL.hs
+	@sed -i '11iinstance Show CIdent where' src/AbsSPL.hs
+	@sed -i '12ishow (CIdent name) = name' src/AbsSPL.hs
 	@sed -i '12s/^/    /' src/AbsSPL.hs
+	@sed -i '14iinstance Show VIdent where' src/AbsSPL.hs
+	@sed -i '15ishow (VIdent name) = name' src/AbsSPL.hs
+	@sed -i '15s/^/    /' src/AbsSPL.hs
 	@sed -i '12iimport Data.Char (ord)' src/LexSPL.hs
 
 clean:

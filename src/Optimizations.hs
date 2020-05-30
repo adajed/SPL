@@ -9,6 +9,7 @@ import DeadCodeElimination
 import LocalCommonSubexpressionElimination
 import RemoveNop
 import TrivialPhiElimination
+import UnreachableCodeElimination
 
 optimize :: BBGraph -> BBGraph
 optimize g = head (iterateUntilFixpoint opts g)
@@ -19,7 +20,8 @@ optimize g = head (iterateUntilFixpoint opts g)
                , copyPropagation
                , trivialPhiElimination
                , deadCodeElimination
-               , removeNop]
+               , removeNop
+               , unreachableCodeElimination ]
 
 
 iterateUntilFixpoint :: (BBGraph -> BBGraph) -> BBGraph -> [BBGraph]
