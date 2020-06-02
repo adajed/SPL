@@ -1,0 +1,86 @@
+void mergesort(int[] arr, int s, int e)
+{
+    if (s >= e - 1)
+        return;
+
+    int m = (s + e) / 2;
+
+    mergesort(arr, s, m);
+    mergesort(arr, m, e);
+
+    int[] newarr = new int[e - s];
+
+    int i = s, j = m, p = 0;
+    while (i < m || j < e)
+    {
+        if (i == m)
+        {
+            newarr[p] = arr[j];
+            j++;
+        }
+        else if (j == e)
+        {
+            newarr[p] = arr[i];
+            i++;
+        }
+        else
+        {
+            if (arr[i] < arr[j])
+            {
+                newarr[p] = arr[i];
+                i++;
+            }
+            else
+            {
+                newarr[p] = arr[j];
+                j++;
+            }
+        }
+
+        p++;
+    }
+
+    i = s;
+    p = 0;
+    while (i < e)
+    {
+        arr[i] = newarr[p];
+        i++;
+        p++;
+    }
+
+    return;
+}
+
+void printArray(int[] arr, int n)
+{
+    int i = 0;
+    while (i < n)
+    {
+        printInt(arr[i]);
+        i++;
+    }
+
+    return;
+}
+
+int main()
+{
+    int n = 10;
+    int[] arr = new int[n];
+
+    int b = 1;
+    int i = 0;
+    while (i < n)
+    {
+        arr[i] = b * i * i;
+        i++;
+        b = -b;
+    }
+
+    printArray(arr, n);
+    mergesort(arr, 0, n);
+    printArray(arr, n);
+
+    return 0;
+}

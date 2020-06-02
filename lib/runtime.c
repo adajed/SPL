@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void printInt(void* env, int n)
+void printInt(int n)
 {
     printf("%d\n", n);
 }

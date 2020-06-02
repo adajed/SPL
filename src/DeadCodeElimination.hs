@@ -1,23 +1,52 @@
-module DeadCodeElimination where
+module DeadCodeElimination (
+    deadCodeElimination
+    ) where
 
 import Data.Map as Map
 
+import AbsSPL
 import BasicBlock
 import IR
 import OptimizationUtils
 
 deadCodeElimination :: BBGraph -> BBGraph
 deadCodeElimination g = mapIR f g
-    where f = (changeToNopIfUnused g) . (callToVoidVall g)
+    where f = (changeToNopIfUnused g)
+            . (callToVoidCall g)
+            . (fixBuildinFunctions g)
+            . trivialCopy
 
 changeToNopIfUnused :: BBGraph -> IR -> IR
 changeToNopIfUnused g ir =
     if isUsed g ir then ir else IR_Nop
 
-callToVoidVall :: BBGraph -> IR -> IR
-callToVoidVall g ir@(IR_Call y f xs) =
+callToVoidCall :: BBGraph -> IR -> IR
+callToVoidCall g ir@(IR_Call y f xs) =
     if isVarUsed g y then ir else IR_VoidCall f xs
-callToVoidVall g ir = ir
+callToVoidCall g ir = ir
+
+buildinFunctions :: Map ValIR Int
+buildinFunctions = Map.fromList [(LabelIR (VIdent "printInt"), 1)]
+
+fixBuildinFunctions :: BBGraph -> IR -> IR
+fixBuildinFunctions g ir@(IR_Call y f xs) =
+    case buildinFunctions !? f of
+      Nothing -> ir
+      Just n -> IR_Call y f (lastN n xs)
+fixBuildinFunctions g ir@(IR_VoidCall f xs) =
+    case buildinFunctions !? f of
+      Nothing -> ir
+      Just n -> IR_VoidCall f (lastN n xs)
+fixBuildinFunctions g ir = ir
+
+trivialCopy :: IR -> IR
+trivialCopy ir@(IR_Ass x v) =
+    if VarIR x == v then IR_Nop else ir
+trivialCopy ir = ir
+
+lastN :: Int -> [a] -> [a]
+lastN n xs = Prelude.drop (length xs - n) xs
+
 
 isUsed :: BBGraph -> IR -> Bool
 isUsed g ir =

@@ -1,20 +1,29 @@
 module Optimizations where
 
-import BasicBlock
+import Data.Map as Map
+
 
 import ArithmeticOptimizations
+import AbsSPL
+import BasicBlock
 import ConstantFolding
 import CopyPropagation
 import DeadCodeElimination
+import GlobalCommonSubexpressionElimination
 import LocalCommonSubexpressionElimination
 import RemoveNop
 import TrivialPhiElimination
 import UnreachableCodeElimination
 
-optimize :: BBGraph -> BBGraph
-optimize g = head (iterateUntilFixpoint opts g)
-    where opts = foldl (.) id fs
-          fs = [ localCommonSubexpressionElimination
+optimize :: Map VIdent BBGraph -> Map VIdent BBGraph
+optimize program = iterateUntilFixpoint opts program
+    where opts = (Map.map optimizeBBGraph)
+
+optimizeBBGraph :: BBGraph -> BBGraph
+optimizeBBGraph g = iterateUntilFixpoint opts g
+    where opts = Prelude.foldl (.) id fs
+          fs = [ globalCommonSubexpressionElimination
+               , localCommonSubexpressionElimination
                , constantFolding
                , arithmeticOptimizations
                , copyPropagation
@@ -24,8 +33,8 @@ optimize g = head (iterateUntilFixpoint opts g)
                , unreachableCodeElimination ]
 
 
-iterateUntilFixpoint :: (BBGraph -> BBGraph) -> BBGraph -> [BBGraph]
-iterateUntilFixpoint f g = help [g] g
-    where help xs x =
-            let newx = f x
-              in if x == newx then xs else help (newx:xs) newx
+iterateUntilFixpoint :: Eq a => (a -> a) -> a -> a
+iterateUntilFixpoint f x =
+    let x' = f x
+     in if x == x' then x
+                   else iterateUntilFixpoint f x'

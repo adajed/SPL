@@ -79,15 +79,18 @@ compileProgram parser fileContent = do
     program <- liftM (fmap (const ())) $ parser abstractTree
     program' <- staticCheck program
     code <- runGenerateIR program'
-    ir <- liftM (Map.map layoutBBGraph) $ mapM optimizeCode code
+    ir <- optimizeCode code
     let code = Map.map genCode ir
     return (fmap (const ()) program, Map.map fst ir, code)
 
 
-optimizeCode :: [IR] -> Err BBGraph
-optimizeCode code = do
-    g <- toSSA (splitIntoBasicBlocks code)
-    return (removePhi (optimize g))
+optimizeCode :: Map VIdent [IR] -> Err (Map VIdent ([IR], [Int]))
+optimizeCode p = do
+    p <- mapM (toSSA . splitIntoBasicBlocks) p
+    p <- return (optimize p)
+    p <- return (Map.map removePhi p)
+    p <- return (Map.map layoutBBGraph p)
+    return p
 
 run :: ParseFun (Program a) -> Bool -> Bool -> String -> IO ()
 run parser bShowTree bSaveIR filepath = do

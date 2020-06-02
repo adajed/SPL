@@ -5,6 +5,8 @@ import Data.Map as Map
 import BasicBlock
 import IR
 
+type Ind a = (Int, a)
+
 modifyValue :: (ValIR -> ValIR) -> IR -> IR
 modifyValue f ir =
     case ir of
@@ -34,3 +36,28 @@ mapIR f g = g { ids = Map.map (\(BB name xs) -> BB name (Prelude.map f xs)) (ids
 
 liftBB :: ([IR] -> [IR]) -> BasicBlock -> BasicBlock
 liftBB f (BB name xs) = BB name (f xs)
+
+change :: Int -> a -> [a] -> [a]
+change n x xs = (Prelude.take n xs) ++ [x] ++ (Prelude.drop (n+1) xs)
+
+changeBBGraph :: Int -> Int -> IR -> BBGraph -> BBGraph
+changeBBGraph i n ir g = g { ids = ids' }
+    where ids' = Map.adjust f i (ids g)
+          f (BB name xs) = BB name (change n ir xs)
+
+allPairs :: [a] -> [(Ind a, Ind a)]
+allPairs xs = h (zip [0..] xs) []
+    where h :: [Ind a] -> [(Ind a, Ind a)] -> [(Ind a, Ind a)]
+          h [] acc = acc
+          h (y:ys) acc = h ys ((zip (repeat y) ys) ++ acc)
+
+allTriples :: [a] -> [(Ind a, Ind a, Ind a)]
+allTriples xs = h1 (zip [0..] xs) []
+    where h1 :: [Ind a] -> [(Ind a, Ind a, Ind a)] -> [(Ind a, Ind a, Ind a)]
+          h1 [] acc = acc
+          h1 (y:ys) acc = h1 ys ((zip' (repeat y) ys') ++ acc)
+              where ys' = h2 ys []
+          h2 :: [Ind a] -> [(Ind a, Ind a)] -> [(Ind a, Ind a)]
+          h2 [] acc = acc
+          h2 (y:ys) acc = h2 ys ((zip (repeat y) ys) ++ acc)
+          zip' = zipWith (\a -> \(b, c) -> (a, b, c))

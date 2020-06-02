@@ -71,7 +71,7 @@ moveArgsToStart :: BBGraph -> BBGraph
 moveArgsToStart g = g''
     where args = concat (Prelude.map getArgsBB (Map.elems (ids g)))
           f (v@(SVar _ s), n) = IR_Ass v (VarIR (SVar (VarA n) s))
-          newargs = Prelude.map f (Prelude.zip args [1..])
+          newargs = Prelude.map f (zip args [1..])
           getArgsBB (BB _ xs) = concat (Prelude.map getArgsIR xs)
           getArgsIR ir = case ir of { (IR_Argument x) -> [x] ; _ -> [] }
           isArg ir = case ir of { (IR_Argument _) -> True ; _ -> False }

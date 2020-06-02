@@ -23,7 +23,7 @@ data ValIR = VarIR SVar
            | BoolIR Bool
            | VoidIR
            | LabelIR VIdent
-    deriving (Eq)
+    deriving (Eq, Ord)
 instance Show ValIR where
     show (VarIR var) = show var
     show (IntIR n size) = show n ++ ":" ++ show size
