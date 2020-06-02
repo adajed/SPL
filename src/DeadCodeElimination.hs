@@ -13,7 +13,6 @@ deadCodeElimination :: BBGraph -> BBGraph
 deadCodeElimination g = mapIR f g
     where f = (changeToNopIfUnused g)
             . (callToVoidCall g)
-            . (fixBuildinFunctions g)
             . trivialCopy
 
 changeToNopIfUnused :: BBGraph -> IR -> IR
@@ -24,20 +23,6 @@ callToVoidCall :: BBGraph -> IR -> IR
 callToVoidCall g ir@(IR_Call y f xs) =
     if isVarUsed g y then ir else IR_VoidCall f xs
 callToVoidCall g ir = ir
-
-buildinFunctions :: Map ValIR Int
-buildinFunctions = Map.fromList [(LabelIR (VIdent "printInt"), 1)]
-
-fixBuildinFunctions :: BBGraph -> IR -> IR
-fixBuildinFunctions g ir@(IR_Call y f xs) =
-    case buildinFunctions !? f of
-      Nothing -> ir
-      Just n -> IR_Call y f (lastN n xs)
-fixBuildinFunctions g ir@(IR_VoidCall f xs) =
-    case buildinFunctions !? f of
-      Nothing -> ir
-      Just n -> IR_VoidCall f (lastN n xs)
-fixBuildinFunctions g ir = ir
 
 trivialCopy :: IR -> IR
 trivialCopy ir@(IR_Ass x v) =

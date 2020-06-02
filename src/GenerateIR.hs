@@ -155,7 +155,7 @@ generateIR_TopDef addEnv (FnDef _ t name args (Bl _ stmts)) = do
     env <- getsSState varenv
     emitIR (IR_Label name)
     let envArg = Arg (Void ()) (Void (Void ())) (VIdent "")
-    let args' = if addEnv then envArg:args else args
+    let args' = if addEnv then args ++ [envArg] else args
     mapM_ declareArg args'
     modifySState (\s -> s { levelCounter = (levelCounter s) + 1 } )
     mapM_ generateIR_Stmt stmts
@@ -256,14 +256,7 @@ generateIR_Expr (EInt _ n) = return (IntIR (fromInteger n) 4)
 generateIR_Expr (ETrue _) = return (BoolIR True)
 generateIR_Expr (EFalse _) = return (BoolIR False)
 generateIR_Expr (ENull _) = return (IntIR 0 8)
-generateIR_Expr (EVar _ name) = do
-    e <- gets varenv
-    case e !? name of
-      Just var -> return (VarIR var)
-      Nothing -> do
-                t <- generateIR_Expr_Alloc (EInt (Int ()) 16)
-                emitIR (IR_MemSave t (LabelIR name) 8)
-                return t
+generateIR_Expr (EVar _ name) = liftM (VarIR . (! name)) $ gets varenv
 generateIR_Expr (EField _ expr field) =
     case exprType expr of
       Class _ cls -> do
@@ -282,12 +275,9 @@ generateIR_Expr expr@(EArrAcc type_ arr index) = do
     loc <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t arrV v')
     liftM VarIR $ emitIR_ToTemp size (\t -> IR_MemRead t loc)
 generateIR_Expr (EApp ty fExpr args) = do
+    f <- generateIR_AppExpr fExpr ty
     xs <- mapM generateIR_Expr args
-    f <- generateIR_Expr fExpr
-    fPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t f)
-    temp <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t f (IntIR 8 8))
-    envPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t temp)
-    liftM VarIR $ emitIR_ToTemp (sizeOf ty) (\t -> IR_Call t fPtr (envPtr:xs))
+    f xs
 generateIR_Expr (EUnaryOp _ op expr) = generateIR_UnOp op' expr
     where op' = case op of
                   Neg _    -> UOpInt INeg
@@ -336,7 +326,8 @@ generateIR_Expr e@(ELambda ty args stmt) = do
     let envType = Class (Void ()) envName
     let stmt' = substitute envType env (Set.fromList freeVars) stmt
     let tOut = case ty of { Fun _ t _ -> fmap (const (Void ())) t; _ -> Void (Void ()) }
-    addLambda tOut lambdaName ((Arg (Void ()) envType env):args) stmt'
+    let envArg = Arg (Void ()) envType env
+    addLambda tOut lambdaName (args ++ [envArg]) stmt'
     return v
 
 setupEnv :: Map VIdent Offset -> Map VIdent Int -> ValIR -> VIdent -> GenerateIR ()
@@ -394,6 +385,27 @@ generateIR_LExpr (EField _ expr field) =
             y <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t x (IntIR offset 8))
             return (\v -> emitIR (IR_MemSave y v size))
       _ -> fail "error"
+
+generateIR_AppExpr :: Expr T -> T -> GenerateIR ([ValIR] -> GenerateIR ValIR)
+generateIR_AppExpr (EVar _ name) ty = do
+    v <- liftM (!? name) $ gets varenv
+    case v of
+      Just var -> return (\xs -> do
+                                 let v = VarIR var
+                                 fPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t v)
+                                 temp <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t v (IntIR 8 8))
+                                 envPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t temp)
+                                 liftM VarIR $ emitIR_ToTemp (sizeOf ty) (\t -> IR_Call t fPtr (xs ++ [envPtr]))
+                         )
+      Nothing -> return (\xs -> liftM VarIR $ emitIR_ToTemp (sizeOf ty) (\t -> IR_Call t (LabelIR name) xs))
+generateIR_AppExpr fExpr ty = do
+    v <- generateIR_Expr fExpr
+    return (\xs -> do
+                   fPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t v)
+                   temp <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t v (IntIR 8 8))
+                   envPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t temp)
+                   liftM VarIR $ emitIR_ToTemp (sizeOf ty) (\t -> IR_Call t fPtr (xs ++ [envPtr]))
+           )
 
 generateIR_JumpExpr :: Expr T -> VIdent -> VIdent -> GenerateIR ()
 generateIR_JumpExpr (ERel _ e1 op e2) lTrue lFalse = do
