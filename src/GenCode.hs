@@ -88,7 +88,7 @@ genBBGraph g = do
     let (g', regAlloc) = colorBBGraph g
     setRegisterAllocation regAlloc
     let inds = flattenBBGraph g'
-    let bbs = map ((ids g) M.!) inds
+    let bbs = map ((ids g') M.!) inds
     mapM_ allocVarOnStack (getSpilledVars g')
     n <- gets offset
     let n' = n + stackOffset n
@@ -99,7 +99,7 @@ genBBGraph g = do
                    emit (CSub rsp (VInt n' QWord)))
     let usedCallerSaveRegs = S.filter (`elem` callerSaveRegs) (S.fromList (M.elems regAlloc))
     mapM_ (push . (`VReg` QWord)) usedCallerSaveRegs
-    foldM_ declareArgFromStack (16, 7) (Prelude.drop 6 (args g))
+    foldM_ declareArgFromStack (16, 7) (Prelude.drop 6 (args g'))
     mapM_ genBasicBlock bbs
 
 moveArgToReg :: SVar -> Val -> GenCode ()
@@ -137,13 +137,13 @@ move v1 v2 = when (v1 /= v2) (emit (CMov v1 v2))
 
 push :: Val -> GenCode ()
 push v = do
-    modify (\s -> s { offset = (offset s) - sizeToInt (takeSize v)
+    modify (\s -> s { offset = (offset s) + sizeToInt (takeSize v)
                     , pushedRegs = v:(pushedRegs s) })
     emit (CPush v)
 
 pop :: Val -> GenCode ()
 pop v = do
-    modify (\s -> s { offset = (offset s) + sizeToInt (takeSize v) })
+    modify (\s -> s { offset = (offset s) - sizeToInt (takeSize v) })
     emit (CPop v)
 
 leave :: GenCode ()

@@ -35,7 +35,7 @@ single_test()
             echo $true_out
             test_output=0
         fi
-        rm ${_exec}.s ${_exec}
+        rm ${_exec}.s ${_exec}.o ${_exec}
     fi
 }
 
@@ -53,7 +53,7 @@ single_bad_test()
     else
         echo -e "\e[31mSPL failed\e[39m"
         test_output=0
-        rm ${_exec}.s ${_exec}
+        rm ${_exec}.s ${_exec}.o ${_exec}
     fi
 }
 
