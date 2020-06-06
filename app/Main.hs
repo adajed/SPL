@@ -87,14 +87,15 @@ writeCode h (fName, xs) = do
     mapM_ f xs
     hPutStrLn h ""
 
-compileProgram :: ParseFun (Program a) -> String -> Err (Program (), M.Map VIdent BBGraph) --,  M.Map VIdent [Code])
+compileProgram :: ParseFun (Program a) -> String -> Err (Program (), M.Map VIdent BBGraph,  M.Map VIdent [Code])
 compileProgram parser fileContent = do
     let abstractTree = myLLexer fileContent
     program <- liftM (fmap (const ())) $ parser abstractTree
     program' <- staticCheck program
     code <- runGenerateIR program'
     ir <- optimizeCode code
-    return (fmap (const ()) program, ir)
+    let code = M.map genCode ir
+    return (fmap (const ()) program, ir, code)
 
 
 optimizeCode :: M.Map VIdent [IR] -> Err (M.Map VIdent BBGraph)
@@ -114,7 +115,7 @@ run parser bShowTree bSaveIR filepath = do
       Bad errorMsg -> do
           hPutStrLn stderr errorMsg
           exitFailure
-      Ok (program, ir) -> do
+      Ok (program, ir, code) -> do
           when bShowTree (hPutStrLn stdout (printTree program))
           let fileIR = changeExtension filepath "ir"
           let fileCode = changeExtension filepath "s"
@@ -124,11 +125,11 @@ run parser bShowTree bSaveIR filepath = do
               handleIR <- openFile fileIR WriteMode
               mapM_ (writeIR handleIR) (M.assocs ir)
               hClose handleIR)
-          -- handleCode <- openFile fileCode WriteMode
-          -- writeCodeMap handleCode code
-          -- hClose handleCode
-          -- callCommand ("nasm -felf64 -o " ++ fileObj ++ " " ++ fileCode)
-          -- callCommand ("gcc -no-pie -o " ++ fileOut ++ " " ++ fileObj ++ " lib/runtime.o")
+          handleCode <- openFile fileCode WriteMode
+          writeCodeMap handleCode code
+          hClose handleCode
+          callCommand ("nasm -felf64 -o " ++ fileObj ++ " " ++ fileCode)
+          callCommand ("gcc -no-pie -o " ++ fileOut ++ " " ++ fileObj ++ " lib/runtime.o")
 
 main :: IO ()
 main = do

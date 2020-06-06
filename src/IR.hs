@@ -20,20 +20,24 @@ instance Show SVar where
 
 data ValIR = VarIR SVar
            | IntIR Int Int
-           | BoolIR Bool
            | VoidIR
            | LabelIR VIdent
     deriving (Eq, Ord)
 instance Show ValIR where
     show (VarIR var) = show var
     show (IntIR n size) = show n ++ ":" ++ show size
-    show (BoolIR b)  = show b
     show (VoidIR) = "void"
     show (LabelIR label) = show label
 
-data IBinOp = IAdd | ISub | IMul | IDiv | IMod | ILshift | IRshift | IBitAnd | IBitOr | IBitXor
+valIRSize :: ValIR -> Int
+valIRSize (VarIR (SVar _ s)) = s
+valIRSize (IntIR _ s) = s
+valIRSize (LabelIR _) = 8
+
+
+data BinOp = IAdd | ISub | IMul | IDiv | IMod | ILshift | IRshift | IBitAnd | IBitOr | IBitXor | BAnd | BOr | BXor
     deriving (Eq)
-instance Show IBinOp where
+instance Show BinOp where
     show IAdd    = "+"
     show ISub    = "-"
     show IMul    = "*"
@@ -44,24 +48,16 @@ instance Show IBinOp where
     show IBitAnd = "&"
     show IBitOr  = "|"
     show IBitXor = "^"
+    show BAnd    = "and"
+    show BOr     = "or"
+    show BXor    = "xor"
 
-data IUnOp = INeg | INot
+data UnOp = INeg | IBitNot | BNot
     deriving (Eq)
-instance Show IUnOp where
-    show INeg = "-"
-    show INot = "~"
-
-data BBinOp = BAnd | BOr | BXor
-    deriving (Eq)
-instance Show BBinOp where
-    show BAnd = "and"
-    show BOr  = "or"
-    show BXor = "xor"
-
-data BUnOp = BNot
-    deriving (Eq)
-instance Show BUnOp where
-    show BNot = "not"
+instance Show UnOp where
+    show INeg    = "-"
+    show IBitNot = "~"
+    show BNot    = "not"
 
 data RelOp = LTH | LEQ | GTH | GEQ | EQU | NEQ
     deriving (Eq)
@@ -72,18 +68,6 @@ instance Show RelOp where
     show GEQ = ">="
     show EQU = "=="
     show NEQ = "!="
-
-data BinOp = BOpInt IBinOp | BOpBool BBinOp
-    deriving (Eq)
-instance Show BinOp where
-    show (BOpInt op) = show op
-    show (BOpBool op) = show op
-
-data UnOp = UOpInt IUnOp | UOpBool BUnOp
-    deriving (Eq)
-instance Show UnOp where
-    show (UOpInt op) = show op
-    show (UOpBool op) = show op
 
 data IR = IR_Label VIdent                    -- label
         | IR_Ass SVar ValIR                  -- assignment

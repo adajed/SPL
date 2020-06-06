@@ -44,6 +44,18 @@ r13 = RegN 13
 r14 = RegN 14
 r15 = RegN 15
 
+regs :: [Reg]
+regs = [ax, cx, dx, di, si, r8, r9, r10, r11, bx, r12, r13, r14, r15]
+
+calleeSaveRegs :: [Reg]
+calleeSaveRegs = [ax, cx, dx, di, si, r8, r9, r10, r11]
+
+callerSaveRegs :: [Reg]
+callerSaveRegs = [bx, r12, r13, r14, r15]
+
+argRegs :: [Reg]
+argRegs = [di, si, dx, cx, r8, r9]
+
 
 showReg :: Size -> Reg -> String
 showReg Byte  (RegB c) = [c, 'l']
@@ -96,9 +108,20 @@ takeSize (VReg _ s) = s
 takeSize (VMem _ _ s) = s
 takeSize (VLabel _) = QWord
 
+sizeToInt :: Size -> Int
+sizeToInt Byte  = 1
+sizeToInt Word  = 2
+sizeToInt DWord = 4
+sizeToInt QWord = 8
+
+rbp, rsp :: Val
+rbp = VReg bp QWord
+rsp = VReg sp QWord
+
 data Code = CAdd Val Val    -- add
           | CBitAnd Val Val -- bitwise and
           | CCall Val       -- call
+          | CCdq            -- cdq (for division)
           | CCmp Val Val    -- compare
           | CDec Val        -- decrement
           | CUDiv Val       -- unsigned div
@@ -127,6 +150,7 @@ instance Show Code where
                   CAdd a b              -> c ["add", show a, ",", show b]
                   CBitAnd a b           -> c ["and", show a, ",", show b]
                   CCall a               -> c ["call", show a]
+                  CCdq                  -> c ["cdq"]
                   CCmp a b              -> c ["cmp", show a, ",", show b]
                   CDec a                -> c ["dec", show a]
                   CUDiv a               -> c ["div", show a]

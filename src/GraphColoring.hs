@@ -18,18 +18,6 @@ type CollisionGraph = M.Map Node (S.Set Node)
 
 type Coloring = M.Map Node (Maybe Int)
 
-regs :: [Reg]
-regs = [ax, cx, dx, di, si, r8, r9, r10, r11, bx, r12, r13, r14, r15]
-
-calleeSaveRegs :: [Reg]
-calleeSaveRegs = [ax, cx, dx, di, si, r8, r9, r10, r11]
-
-callerSaveRegs :: [Reg]
-callerSaveRegs = [bx, r12, r13, r14, r15]
-
-argRegs :: [Reg]
-argRegs = [di, si, dx, cx, r8, r9]
-
 k :: Int
 k = length regs
 
@@ -89,7 +77,7 @@ argCollisions :: CollisionGraph -> SVar -> CollisionGraph
 argCollisions g v@(SVar (VarA n) s) =
     if n > 6 then g
              else let r = argRegs L.!! (n-1)
-                      rs = S.fromList (map NReg (filter (/= r) argRegs))
+                      rs = S.fromList (map NReg (filter (/= r) calleeSaveRegs))
                     in M.adjust (S.union rs) (NVar v) g
 argCollisions g _ = g
 
@@ -111,24 +99,24 @@ customCollisions m (IR_VoidCall _ _, set1, set2) =
         rs' = S.fromList (map NReg calleeSaveRegs)
         adj m' x = M.adjust (S.union rs') x m'
     in foldl adj m vars
-customCollisions m (IR_BinOp (BOpInt IDiv) x v1 v2, set1, set2) =
+customCollisions m (IR_BinOp IDiv x v1 v2, set1, set2) =
     let rs = S.fromList [NReg ax, NReg dx]
         adj m' x = M.adjust (S.union rs) x m'
         vars = map NVar ((getVars [v2]) ++ S.toList set2)
      in foldl adj m vars
-customCollisions m (IR_BinOp (BOpInt IMod) x v1 v2, set1, set2) =
+customCollisions m (IR_BinOp IMod x v1 v2, set1, set2) =
     let rs = S.fromList [NReg ax, NReg dx]
         adj m' x = M.adjust (S.union rs) x m'
         vars = map NVar ((getVars [v2]) ++ S.toList set2)
      in foldl adj m vars
-customCollisions m (IR_BinOp (BOpInt ILshift) x v1 v2, set1, set2) =
+customCollisions m (IR_BinOp ILshift x v1 v2, set1, set2) =
     case getVars [v2] of
       [] -> m
       [y] -> let rs = S.fromList [NReg cx]
                  adj m' x = M.adjust (S.union rs) x m'
                  vars = map NVar (S.toList (S.delete y set2))
                in foldl adj m vars
-customCollisions m (IR_BinOp (BOpInt IRshift) x v1 v2, set1, set2) =
+customCollisions m (IR_BinOp IRshift x v1 v2, set1, set2) =
     case getVars [v2] of
       [] -> m
       [y] -> let rs = S.fromList [NReg cx]

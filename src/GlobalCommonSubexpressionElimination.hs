@@ -50,35 +50,35 @@ elimTriples xs g = foldl (doElimTriple (last xs)) g c
 
 
 canElimTriple :: (IR, IR, IR) -> Bool
-canElimTriple (IR_BinOp (BOpInt ILshift) x1 v1 (IntIR n1 _)
-              ,IR_BinOp (BOpInt IAdd)    x2 v2 (IntIR n2 _)
-              ,IR_BinOp (BOpInt ILshift) x3 v3 (IntIR n3 _)) =
+canElimTriple (IR_BinOp ILshift x1 v1 (IntIR n1 _)
+              ,IR_BinOp IAdd    x2 v2 (IntIR n2 _)
+              ,IR_BinOp ILshift x3 v3 (IntIR n3 _)) =
     v1 == v2 && (VarIR x2) == v3 && n1 == n3
-canElimTriple (IR_BinOp (BOpInt IMul) x1 v1 (IntIR n1 _)
-              ,IR_BinOp (BOpInt IAdd) x2 v2 (IntIR n2 _)
-              ,IR_BinOp (BOpInt IMul) x3 v3 (IntIR n3 _)) =
+canElimTriple (IR_BinOp IMul x1 v1 (IntIR n1 _)
+              ,IR_BinOp IAdd x2 v2 (IntIR n2 _)
+              ,IR_BinOp IMul x3 v3 (IntIR n3 _)) =
     v1 == v2 && (VarIR x2) == v3 && n1 == n3
-canElimTriple (IR_BinOp (BOpInt IAdd) x1 v1 w1
-              ,IR_BinOp (BOpInt IAdd) x2 v2 w2
-              ,IR_BinOp (BOpInt IAdd) x3 v3 w3) =
+canElimTriple (IR_BinOp IAdd x1 v1 w1
+              ,IR_BinOp IAdd x2 v2 w2
+              ,IR_BinOp IAdd x3 v3 w3) =
     v1 == v3 && w1 == v2 && (VarIR x2) == w3
 canElimTriple _ = False
 
 doElimTriple :: Int -> BBGraph -> (IR, IR, Ind IR) -> BBGraph
-doElimTriple i g (    IR_BinOp (BOpInt ILshift) x1 v1 (IntIR n1 s)
-                 ,    IR_BinOp (BOpInt IAdd)    x2 v2 (IntIR n2 _)
-                 ,(p, IR_BinOp (BOpInt ILshift) x3 v3 (IntIR n3 _))) =
-    changeBBGraph i p (IR_BinOp (BOpInt IAdd) x3 (VarIR x1) n) g
+doElimTriple i g (    IR_BinOp ILshift x1 v1 (IntIR n1 s)
+                 ,    IR_BinOp IAdd    x2 v2 (IntIR n2 _)
+                 ,(p, IR_BinOp ILshift x3 v3 (IntIR n3 _))) =
+    changeBBGraph i p (IR_BinOp IAdd x3 (VarIR x1) n) g
         where n = IntIR ((2 ^ n1) * n2) s
-doElimTriple i g (    IR_BinOp (BOpInt IMul) x1 v1 (IntIR n1 s)
-                 ,    IR_BinOp (BOpInt IAdd) x2 v2 (IntIR n2 _)
-                 ,(p, IR_BinOp (BOpInt IMul) x3 v3 (IntIR n3 _))) =
-    changeBBGraph i p (IR_BinOp (BOpInt IAdd) x3 (VarIR x1) n) g
+doElimTriple i g (    IR_BinOp IMul x1 v1 (IntIR n1 s)
+                 ,    IR_BinOp IAdd x2 v2 (IntIR n2 _)
+                 ,(p, IR_BinOp IMul x3 v3 (IntIR n3 _))) =
+    changeBBGraph i p (IR_BinOp IAdd x3 (VarIR x1) n) g
         where n = IntIR (n1 * n2) s
-doElimTriple i g (    IR_BinOp (BOpInt IAdd) x1 v1 w1
-                 ,    IR_BinOp (BOpInt IAdd) x2 v2 w2
-                 ,(p, IR_BinOp (BOpInt IAdd) x3 v3 w3)) =
-    changeBBGraph i p (IR_BinOp (BOpInt IAdd) x3 (VarIR x1) w2) g
+doElimTriple i g (    IR_BinOp IAdd x1 v1 w1
+                 ,    IR_BinOp IAdd x2 v2 w2
+                 ,(p, IR_BinOp IAdd x3 v3 w3)) =
+    changeBBGraph i p (IR_BinOp IAdd x3 (VarIR x1) w2) g
 doElimTriple _ g _ = g
 
 -- eliminate memory access -----------------------------------------

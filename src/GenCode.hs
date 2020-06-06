@@ -2,377 +2,356 @@ module GenCode where
 
 import qualified Data.Map as M
 import qualified Data.Set as S
+import qualified Data.List as L
 
+import AbsSPL
 import BasicBlock
-import CalculateLiveVars
+import GraphColoring ( colorBBGraph )
 import CodeM
 import IR
 
 import Control.Monad.Trans.State
 import Control.Monad.Identity
 
-data SState = SState { code :: [Code]
-                     , varAddress :: M.Map SVar Val
-                     , varCurrentLocations :: M.Map SVar (S.Set Val)
-                     , regsContent :: M.Map Reg (S.Set SVar)
-                     , offset :: Int
+liftJoin2 :: Monad m => (a -> b -> m c) -> m a -> m b -> m c
+liftJoin2 f ma mb = join (liftM2 f ma mb)
+
+data SState = SState { code          :: [Code]
+                     , varAddress    :: M.Map SVar Val
+                     , regAllocation :: M.Map SVar Val
+                     , offset        :: Int
+                     , pushedRegs    :: [Val]
                      }
 
 type GenCode = StateT SState Identity
-
-regs, argRegs :: [Reg]
-regs = [ax, cx, dx, di, si, r8, r9, r10, r11]
-argRegs = [di, si, dx, cx, r8, r9]
 
 execGenCode :: GenCode a -> [Code]
 execGenCode m = reverse (code (runIdentity (execStateT m state)))
     where state = SState { code = []
                          , varAddress = M.empty
-                         , varCurrentLocations = M.empty
-                         , regsContent = M.fromList (zip regs (repeat S.empty))
+                         , regAllocation = M.empty
                          , offset = 0
+                         , pushedRegs = []
                          }
 
 emit :: Code -> GenCode ()
 emit c = modify (\s -> s { code = c:(code s) } )
 
-getVarAddress :: SVar -> GenCode Val
-getVarAddress x = liftM (M.! x) $ gets varAddress
+intToSize :: Int -> Size
+intToSize 1 = Byte
+intToSize 2 = Word
+intToSize 4 = DWord
+intToSize 8 = QWord
 
-getVarLocations :: SVar -> GenCode (S.Set Val)
-getVarLocations x = liftM (M.! x) $ gets varCurrentLocations
+setRegisterAllocation :: M.Map SVar Reg -> GenCode ()
+setRegisterAllocation regMap = do
+    let allocs = M.mapWithKey (\x@(SVar _ s) r -> VReg r (intToSize s)) regMap
+    modify (\s -> s { regAllocation = allocs })
 
-modifyVarLocations :: SVar -> (S.Set Val -> S.Set Val) -> GenCode ()
-modifyVarLocations x f = modify (\s -> s { varCurrentLocations = M.adjust f x (varCurrentLocations s) })
+getReg :: SVar -> GenCode Val
+getReg x = liftM (M.! x) $ gets regAllocation
 
-modifyRegContent :: Reg -> (S.Set SVar -> S.Set SVar) -> GenCode ()
-modifyRegContent r f = modify (\s -> s { regsContent = M.adjust f r (regsContent s) })
+getAddress :: SVar -> GenCode Val
+getAddress x = liftM (M.! x) $ gets varAddress
 
-setVarLocations :: SVar -> S.Set Val -> GenCode ()
-setVarLocations x vals = do
-    mapM_ (`addVarToVal` x) vals
-    modifyVarLocations x (const vals)
+getSpilledVars :: BBGraph -> S.Set SVar
+getSpilledVars g = S.unions (map go (M.elems (ids g)))
+    where go (BB _ xs) = S.unions (map go' xs)
+          go' (IR_Store x) = S.singleton x
+          go' _ = S.empty
 
-clearVarLocations :: SVar -> GenCode ()
-clearVarLocations x = do
-    locs <- getVarLocations x
-    mapM_ (`clearFromVal` x) locs
-    setVarLocations x S.empty
-
-clearReg :: Reg -> GenCode ()
-clearReg r = do
-    modifyRegContent r (const S.empty)
-    let f (VReg r' _) = r /= r'
-        f _ = True
-    modify (\s -> s { varCurrentLocations = M.map (S.filter f) (varCurrentLocations s) })
-
-clearVar :: SVar -> GenCode ()
-clearVar x = do
-    modifyVarLocations x (const S.empty)
-    modify (\s -> s { regsContent = M.map (S.delete x) (regsContent s) })
-
-clearFromVal :: Val -> SVar -> GenCode ()
-clearFromVal (VReg r _) x = modifyRegContent r (S.delete x)
-clearFromVal _ _ = return ()
-
-addVarToVal :: Val -> SVar -> GenCode ()
-addVarToVal (VReg r _) x = modifyRegContent r (S.insert x)
-addVarToVal _ _ = return ()
-
-getBestLocation :: SVar -> GenCode Val
-getBestLocation x = do
-    locs <- getVarLocations x
-    let intLocs = S.filter (liftM2 (||) isInt isLabel) locs
-    if not (S.null intLocs)
-       then return (head (S.toList intLocs))
-       else do
-            let regLocs = S.filter isReg locs
-            if not (S.null regLocs)
-            then return (head (S.toList regLocs))
-            else return (head (S.toList locs))
-
-saveLiveVars :: S.Set SVar -> GenCode ()
-saveLiveVars vars = mapM_ saveVar (S.toList vars)
-
-saveVar :: SVar -> GenCode ()
-saveVar x = do
-    addr <- getVarAddress x
-    locs <- getVarLocations x
-    let l = head (S.toList locs)
-    when (S.notMember addr locs) (emit (CMov addr l))
-    modifyVarLocations x (S.insert addr)
-
-getFreeReg :: GenCode Reg
-getFreeReg = do
-    rs <- gets regsContent
-    let freeRegs = M.keys (M.filter (== S.empty) rs)
-    case freeRegs of
-      (r:_) -> return r
-      [] -> do
-            let r = head (M.keys rs)
-            freeReg r
-            return r
-
-freeReg :: Reg -> GenCode ()
-freeReg r = do
-    rs <- gets regsContent
-    mapM_ saveVar (rs M.! r)
-    clearReg r
-
-getSize :: Int -> Size
-getSize 1 = Byte
-getSize 2 = Word
-getSize 4 = DWord
-getSize 8 = QWord
-getSize _ = DWord
-
-allocNewVar :: SVar -> GenCode ()
-allocNewVar x@(SVar _ size) = do
-    n <- liftM (+size) $ gets offset
-    let v = VMem bp (-n) (getSize size)
-    modify (\s -> s { varAddress = M.insert x v (varAddress s)
-                    , varCurrentLocations = M.insert x S.empty (varCurrentLocations s)
-                    , offset = n })
-
-tryAllocVar :: SVar -> GenCode ()
-tryAllocVar x@(SVar var@(VarA n) size) =
+allocVarOnStack :: SVar -> GenCode ()
+allocVarOnStack v@(SVar (VarA n) s) =
     if n > 6 then return ()
-             else (do
-                 m <- gets varAddress
-                 case (m M.!? x) of
-                   Just _ -> return ()
-                   Nothing -> allocNewVar x)
-tryAllocVar x = do
-    m <- gets varAddress
-    case (m M.!? x) of
-      Just _ -> return ()
-      Nothing -> allocNewVar x
-
-allocValue :: ValIR -> GenCode ()
-allocValue (VarIR var) = tryAllocVar var
-allocValue _ = return ()
-
-eax, ecx, edx :: Val
-eax = VReg ax DWord
-ecx = VReg cx DWord
-edx = VReg dx DWord
-
-rbp, rsp :: Val
-rbp = VReg bp QWord
-rsp = VReg sp QWord
-
-valIRSize :: ValIR -> Int
-valIRSize (VarIR (SVar _ n)) = n
-valIRSize (IntIR _ n) = n
-valIRSize (BoolIR _) = 1
-valIRSize (VoidIR) = 0
-valIRSize (LabelIR _) = 8
-
-valSize :: Val -> Size
-valSize (VMem _ _ s) = s
-valSize (VReg _ s) = s
-valSize (VInt _ s) = s
+             else do
+                  n <- liftM (+s) $ gets offset
+                  let size = intToSize s
+                  modify (\s -> s { varAddress = M.insert v (VMem bp (-n) size) (varAddress s)
+                                  , offset = n })
+allocVarOnStack v@(SVar _ s) = do
+    n <- liftM (+s) $ gets offset
+    let size = intToSize s
+    modify (\s -> s { varAddress = M.insert v (VMem bp (-n) size) (varAddress s)
+                    , offset = n })
 
 stackOffset :: Int -> Int
 stackOffset n = Prelude.mod n' 16
     where n' = 16 - Prelude.mod n 16
 
+-- generate code
 
-allVars :: BBLiveVars -> S.Set SVar
-allVars m = S.unions (M.elems (M.map S.unions m))
+genCode :: BBGraph -> [Code]
+genCode g = execGenCode (genBBGraph g)
 
-getV :: SVar -> Var
-getV (SVar x _) = x
-
-genCode :: BBGraph -> BBLiveVars -> [Code]
-genCode g m = execGenCode (genBBGraph g m)
-
-genBBGraph :: BBGraph -> BBLiveVars -> GenCode ()
-genBBGraph g m = do
-    let inds = flattenBBGraph g
-    let bbs = ids g
-    mapM_ tryAllocVar (allVars m)
+genBBGraph :: BBGraph -> GenCode ()
+genBBGraph g = do
+    let (g', regAlloc) = colorBBGraph g
+    setRegisterAllocation regAlloc
+    let inds = flattenBBGraph g'
+    let bbs = map ((ids g) M.!) inds
+    mapM_ allocVarOnStack (getSpilledVars g')
     n <- gets offset
     let n' = n + stackOffset n
     modify (\s -> s { offset = n' })
-    emit (CPush rbp)
-    emit (CMov rbp rsp)
-    emit (CSub rsp (VInt n' QWord))
-    foldM_ declareArgFromStack (16, 6) (Prelude.drop 6 (args g))
-    foldM_ declareArgFromArg 1 (Prelude.zip argRegs (Prelude.take 6 (args g)))
-    mapM_ (\i -> genBasicBlock (bbs M.! i) (m M.! i)) inds
+    when (n' > 0) (do
+                   emit (CPush rbp)
+                   emit (CMov rbp rsp)
+                   emit (CSub rsp (VInt n' QWord)))
+    let usedCallerSaveRegs = S.filter (`elem` callerSaveRegs) (S.fromList (M.elems regAlloc))
+    mapM_ (push . (`VReg` QWord)) usedCallerSaveRegs
+    foldM_ declareArgFromStack (16, 7) (Prelude.drop 6 (args g))
+    mapM_ genBasicBlock bbs
 
-genBasicBlock :: BasicBlock -> [S.Set SVar] -> GenCode ()
-genBasicBlock (BB label xs) liveVars = do
+moveArgToReg :: SVar -> Val -> GenCode ()
+moveArgToReg (SVar (VarA n) s) r = do
+    let r1 = VReg (argRegs L.!! (n-1)) (intToSize s)
+    move r r1
+
+genBasicBlock :: BasicBlock -> GenCode ()
+genBasicBlock (BB (VIdent ".__START__") xs) = do
+    allocs <- gets regAllocation
+    let isArg (SVar (VarA _) _) _ = True
+        isArg _ _ = False
+    let argVars = M.filterWithKey isArg allocs
+    mapM_ (uncurry moveArgToReg) (M.toList argVars)
+    mapM_ genIR xs
+genBasicBlock (BB label xs) = do
     emit (CLabel (VLabel label))
-    let vars = zip (init liveVars) (tail liveVars)
-    mapM_ genIRm (zip xs vars)
-    mapM_ saveVar (last liveVars)
+    mapM_ genIR xs
 
 declareArgFromStack :: (Int, Int) -> Int -> GenCode (Int, Int)
-declareArgFromStack (n, i) size = do
-    let a = (SVar (VarA n) size)
-    let v = VMem bp n (getSize size)
+declareArgFromStack (n, i) s = do
+    let a = (SVar (VarA i) s)
+    let size = intToSize s
+    let v = VMem bp n size
     modify (\s -> s { varAddress = M.insert a v (varAddress s) })
-    modifyVarLocations a (S.insert v)
-    return (n + size, i + 1)
+    return (n + s, i + 1)
 
-declareArgFromArg :: Int -> (Reg, Int) -> GenCode Int
-declareArgFromArg i (r, size) = do
-    let v = VReg r (getSize size)
-    let a = SVar (VarA i) size
-    modifyVarLocations a (S.insert v)
-    modifyRegContent r (S.insert a)
-    return (i + 1)
+toVal :: ValIR -> GenCode Val
+toVal (IntIR n s) = return (VInt n (intToSize s))
+toVal (LabelIR l) = return (VLabel l)
+toVal (VarIR x)   = getReg x
 
-genIRm :: (IR, (S.Set SVar, S.Set SVar)) -> GenCode ()
-genIRm (ir, (sBefore, sAfter)) = do
-    genIR ir sAfter
-    mapM_ clearVar (S.difference sBefore sAfter)
+move :: Val -> Val -> GenCode ()
+move v1 v2 = when (v1 /= v2) (emit (CMov v1 v2))
 
-emit_BinOp :: (Val -> Val -> Code) -> SVar -> Val -> Val -> GenCode ()
-emit_BinOp constr x v@(VReg r _) v' = do
-    emit (constr v v')
-    clearReg r
-    modifyRegContent r (S.insert x)
-    modifyVarLocations x (S.insert v)
+push :: Val -> GenCode ()
+push v = do
+    modify (\s -> s { offset = (offset s) - sizeToInt (takeSize v)
+                    , pushedRegs = v:(pushedRegs s) })
+    emit (CPush v)
 
-genIR_BinOp :: (Val -> Val -> Code) -> SVar -> ValIR -> ValIR -> S.Set SVar -> GenCode ()
-genIR_BinOp c x (VarIR y) (IntIR n s) set = do
-    let n' = VInt n (getSize s)
-    v <- getBestLocation y
-    if S.notMember y set && isReg v
-       then emit_BinOp c x v n'
-       else do
-            r <- getFreeReg
-            let s' = takeSize v
-            let v' = VReg r s'
-            emit (CMov v' v)
-            emit_BinOp c x v' n'
-genIR_BinOp c x (IntIR n s) (VarIR y) set = do
-    genIR_BinOp c x (VarIR y) (IntIR n s) set
-genIR_BinOp c x (VarIR y1) (VarIR y2) set = do
-    v1 <- getBestLocation y1
-    v2 <- getBestLocation y2
-    if S.notMember y1 set && isReg v1
-       then emit_BinOp c x v1 v2
-    else if S.notMember y2 set && isReg v2
-       then emit_BinOp c x v2 v1
+pop :: Val -> GenCode ()
+pop v = do
+    modify (\s -> s { offset = (offset s) + sizeToInt (takeSize v) })
+    emit (CPop v)
+
+leave :: GenCode ()
+leave = do
+    regs <- gets pushedRegs
+    mapM_ (emit . CPop) regs
+    n <- gets offset
+    let n' = n - sum (map (sizeToInt . takeSize) regs)
+    when (n' > 0) (emit CLeave)
+
+toVMem :: Val -> Size -> Val
+toVMem (VReg r _) size = VMem r 0 size
+
+setSize :: Size -> Val -> Val
+setSize size (VReg r _) = VReg r size
+setSize size (VInt n _) = VInt n size
+
+genIR_BinOp :: (Val -> Val -> Code) -> SVar -> ValIR -> ValIR -> GenCode ()
+genIR_BinOp f y v1 v2 = do
+    r_y <- getReg y
+    r_v1 <- toVal v1
+    r_v2 <- toVal v2
+    if r_y == r_v1
+        then emit (f r_y r_v2)
+    else if r_y == r_v2
+        then emit (f r_y r_v1)
     else do
-         r <- getFreeReg
-         let s' = takeSize v1
-         let v' = VReg r s'
-         emit (CMov v' v1)
-         emit_BinOp c x v' v2
+         move r_y r_v1
+         emit (f r_y r_v2)
 
-genIR :: IR -> S.Set SVar -> GenCode ()
+genIR_UnOp :: (Val -> Code) -> SVar -> ValIR -> GenCode ()
+genIR_UnOp f y v = do
+    liftJoin2 move (getReg y) (toVal v)
+    emit =<< liftM f (getReg y)
+
+genIR :: IR -> GenCode ()
 
 -- label
-genIR (IR_Label label) _ = emit (CLabel (VLabel label))
+genIR (IR_Label label) = emit (CLabel (VLabel label))
 
--- assignment
-genIR (IR_Ass x (LabelIR l)) _ = do
-    clearVarLocations x
-    setVarLocations x (S.singleton (VLabel l))
-genIR (IR_Ass x (IntIR n s)) _ = do
-    let size = getSize s
-    let v = VInt n size
-    clearVarLocations x
-    setVarLocations x (S.singleton v)
-genIR (IR_Ass x (VarIR y)) _ = do
-    locs <- getVarLocations y
-    clearVarLocations x
-    setVarLocations x locs
+-- assignement
+genIR (IR_Ass y v) = liftJoin2 move (getReg y) (toVal v)
 
 -- add
-genIR (IR_BinOp (BOpInt IAdd) x v1 v2) set =
-    genIR_BinOp CAdd x v1 v2 set
+genIR (IR_BinOp IAdd y v1 v2) = do
+    r_y <- getReg y
+    let size = takeSize r_y
+    r_v1 <- liftM (setSize size) $ toVal v1
+    r_v2 <- liftM (setSize size) $ toVal v2
+    if r_y == r_v1
+        then emit (CAdd r_y r_v2)
+    else if r_y == r_v2
+        then emit (CAdd r_y r_v1)
+    else do
+         move r_y r_v1
+         emit (CAdd r_y r_v2)
+
+-- sub
+genIR (IR_BinOp ISub y v1 v2) = do
+    r_y <- getReg y
+    r_v1 <- toVal v1
+    r_v2 <- toVal v2
+    if r_y == r_v1
+        then emit (CSub r_y r_v2)
+    else do
+         move r_y r_v1
+         emit (CSub r_y r_v2)
 
 -- mul
-genIR (IR_BinOp (BOpInt IMul) x v1 v2) set =
-    genIR_BinOp CIMul x v1 v2 set
+genIR (IR_BinOp IMul y v1 v2) =
+    genIR_BinOp CIMul y v1 v2
+
+-- div
+genIR (IR_BinOp IDiv y v1 v2) = do
+    r_y <- getReg y
+    r_v1 <- toVal v1
+    r_v2 <- toVal v2
+    let a = VReg ax (takeSize r_v1)
+    move a r_v1
+    emit CCdq
+    emit (CIDiv r_v2)
+    move r_y a
+
+-- mod
+genIR (IR_BinOp IMod y v1 v2) = do
+    r_y <- getReg y
+    r_v1 <- toVal v1
+    r_v2 <- toVal v2
+    let a = VReg ax (takeSize r_v1)
+    move a r_v1
+    emit CCdq
+    emit (CIDiv r_v2)
+    let d = VReg dx (takeSize r_y)
+    move r_y d
+
+-- lshift
+genIR (IR_BinOp ILshift y v (IntIR n s)) = do
+    r_y <- getReg y
+    r_v <- toVal v
+    move r_y r_v
+    emit (CShiftL r_y (VInt n Byte))
+
+genIR (IR_BinOp ILshift y v1 v2) = do
+    r_y <- getReg y
+    r_v1 <- toVal v1
+    r_v2 <- toVal v2
+    move r_y r_v1
+    let c = VReg cx (takeSize r_v2)
+    move c r_v2
+    emit (CShiftL r_y c)
+
+-- rshift
+genIR (IR_BinOp IRshift y v (IntIR n s)) = do
+    r_y <- getReg y
+    r_v <- toVal v
+    move r_y r_v
+    emit (CShiftR r_y (VInt n Byte))
+
+genIR (IR_BinOp IRshift y v1 v2) = do
+    r_y <- getReg y
+    r_v1 <- toVal v1
+    r_v2 <- toVal v2
+    move r_y r_v1
+    let c = VReg cx (takeSize r_v2)
+    move c r_v2
+    emit (CShiftR r_y c)
 
 -- bitand
-genIR (IR_BinOp (BOpInt IBitAnd) x v1 v2) set =
-    genIR_BinOp CBitAnd x v1 v2 set
+genIR (IR_BinOp IBitAnd y v1 v2) =
+    genIR_BinOp CBitAnd y v1 v2
 
 -- bitor
-genIR (IR_BinOp (BOpInt IBitOr) x v1 v2) set =
-    genIR_BinOp CBitOr x v1 v2 set
+genIR (IR_BinOp IBitOr y v1 v2) =
+    genIR_BinOp CBitOr y v1 v2
 
 -- bitxor
-genIR (IR_BinOp (BOpInt IBitXor) x v1 v2) set =
-    genIR_BinOp CBitXor x v1 v2 set
+genIR (IR_BinOp IBitXor y v1 v2) =
+    genIR_BinOp CBitXor y v1 v2
 
--- TODO: lshift
--- left shift
-genIR (IR_BinOp (BOpInt ILshift) x v1 v2) set =
-    genIR_BinOp CShiftL x v1 v2 set
+-- and
+-- or
+-- xor
 
--- TODO: rshift
--- right shift
-genIR (IR_BinOp (BOpInt IRshift) x v1 v2) set =
-    genIR_BinOp CShiftR x v1 v2 set
+-- neg
+genIR (IR_UnOp INeg y v) =
+    genIR_UnOp CNeg y v
+
+-- bitnot
+genIR (IR_UnOp IBitNot y v) =
+    genIR_UnOp CBitNot y v
+-- not
 
 -- memory read
--- genIR (IR_MemRead x (VarIR y)) set = do
+genIR (IR_MemRead x v) = do
+    r_x <- getReg x
+    r_v <- liftM (`toVMem` (takeSize r_x)) $ toVal v
+    move r_x r_v
 
+-- memory save
+genIR (IR_MemSave v1 v2 s) = do
+    let size = intToSize s
+    liftJoin2 move (liftM (`toVMem` size) (toVal v1)) (toVal v2)
+
+-- call
+genIR (IR_Call y f xs) = do
+    genIR (IR_VoidCall f xs)
+    r <- getReg y
+    let a = VReg ax (takeSize r)
+    move r a
+
+-- void call
+genIR (IR_VoidCall f xs) = do
+    let h v r = do
+                let r' = VReg r (intToSize (valIRSize v))
+                v' <- toVal v
+                move r' v'
+    mapM_ (uncurry h) (zip xs argRegs)
+    emit =<< liftM CCall (toVal f)
 
 -- jump
-genIR (IR_Jump label) set = do
-    mapM_ saveVar set
-    emit (CJump (VLabel label))
+genIR (IR_Jump label) = emit (CJump (VLabel label))
 
 -- conditional jump
-genIR (IR_CondJump (VarIR x) op (IntIR n s) label) set = do
-    mapM_ saveVar set
-    v <- getBestLocation x
-    let n' = VInt n (getSize s)
-    emit (CCmp v n')
+genIR (IR_CondJump v1 op v2 label) = do
+    emit =<< liftM2 CCmp (toVal v1) (toVal v2)
     emit (CCondJump op (VLabel label))
-genIR (IR_CondJump (IntIR n s) op (VarIR x) label) set = do
-    mapM_ saveVar set
-    v <- getBestLocation x
-    let n' = VInt n (getSize s)
-    emit (CCmp v n')
-    emit (CCondJump op (VLabel label))
-genIR (IR_CondJump (VarIR x) op (VarIR y) label) set = do
-    mapM_ saveVar set
-    v1 <- getBestLocation x
-    v2 <- getBestLocation y
-    if isReg v1 || isReg v2
-       then emit (CCmp v1 v2)
-       else do
-            r <- getFreeReg
-            let r' = VReg r (takeSize v1)
-            emit (CMov r' v1)
-            emit (CCmp r' v2)
-    emit (CCondJump op (VLabel label))
-
-
 
 -- return
-genIR (IR_Return (IntIR n s)) _ = do
-    let v = VReg ax (getSize s)
-    emit (CMov v (VInt n (getSize s)))
-    emit CLeave
+genIR (IR_Return v) = do
+    let a = VReg ax (intToSize (valIRSize v))
+    liftJoin2 move (return a) (toVal v)
+    genIR IR_VoidReturn
+
+-- void return
+genIR IR_VoidReturn = do
+    leave
     emit CRet
-genIR (IR_Return (VarIR x)) _ = do
-    let v = VReg ax ((\(SVar _ s) -> getSize s) x)
-    vals <- liftM (M.! ax) $ gets regsContent
-    when (S.notMember x vals)
-         (do
-          v' <- getBestLocation x
-          emit (CMov v v'))
-    emit CLeave
-    emit CRet
-genIR IR_VoidReturn _ = do
-    emit (CLeave)
-    emit (CRet)
+
+-- store
+genIR (IR_Store x) =
+    emit =<< liftM2 CMov (getAddress x) (getReg x)
+
+-- load
+genIR (IR_Load x) =
+    emit =<< liftM2 CMov (getReg x) (getAddress x)
 
 -- nop
-genIR (IR_Nop) _ = emit  CNop
+genIR IR_Nop = emit CNop
 
--- undefined
-genIR _ _ = emit CNop
 
+genIR _ = emit CNop

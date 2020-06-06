@@ -127,7 +127,7 @@ addLambda t name args stmt = modify (\s -> s { lambdas = (t, name, args, stmt):(
 
 defaultValue :: Type a -> ValIR
 defaultValue (Int _) = IntIR 0 4
-defaultValue (Bool _) = BoolIR False
+defaultValue (Bool _) = IntIR 0 1
 defaultValue (Void _) = VoidIR
 defaultValue (Class _ _) = IntIR 0 8
 defaultValue (Array _ _) = IntIR 0 8
@@ -186,12 +186,12 @@ generateIR_Stmt (Ass _ expr1 expr2) = do
 generateIR_Stmt (Incr _ expr) = do
     value <- generateIR_Expr expr
     f <- generateIR_LExpr expr
-    temp <- emitIR_ToTemp 4 (\t -> IR_BinOp (BOpInt IAdd) t value (IntIR 1 4))
+    temp <- emitIR_ToTemp 4 (\t -> IR_BinOp IAdd t value (IntIR 1 4))
     f (VarIR temp)
 generateIR_Stmt (Decr _ expr) = do
     value <- generateIR_Expr expr
     f <- generateIR_LExpr expr
-    temp <- emitIR_ToTemp 4 (\t -> IR_BinOp (BOpInt ISub) t value (IntIR 1 4))
+    temp <- emitIR_ToTemp 4 (\t -> IR_BinOp ISub t value (IntIR 1 4))
     f (VarIR temp)
 generateIR_Stmt (Ret _ expr) = do
     value <- generateIR_Expr expr
@@ -253,8 +253,8 @@ relop op = case op of
 generateIR_Expr :: Expr T -> GenerateIR ValIR
 generateIR_Expr (ETypedExpr _ _ expr) = generateIR_Expr expr
 generateIR_Expr (EInt _ n) = return (IntIR (fromInteger n) 4)
-generateIR_Expr (ETrue _) = return (BoolIR True)
-generateIR_Expr (EFalse _) = return (BoolIR False)
+generateIR_Expr (ETrue _) = return (IntIR 1 1)
+generateIR_Expr (EFalse _) = return (IntIR 0 1)
 generateIR_Expr (ENull _) = return (IntIR 0 8)
 generateIR_Expr (EVar _ name) = liftM (VarIR . (! name)) $ gets varenv
 generateIR_Expr (EField _ expr field) =
@@ -263,7 +263,7 @@ generateIR_Expr (EField _ expr field) =
             x <- generateIR_Expr expr
             offset <- liftM ((!field) . (!cls)) $ gets fieldOffset
             size <- liftM ((!field) . (!cls)) $ gets fieldSize
-            y <- emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t x (IntIR offset 8))
+            y <- emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t x (IntIR offset 8))
             z <- emitIR_ToTemp size (\t -> IR_MemRead t (VarIR y))
             return (VarIR z)
       _ -> fail "error"
@@ -271,8 +271,8 @@ generateIR_Expr expr@(EArrAcc type_ arr index) = do
     arrV <- generateIR_Expr arr
     ind <- generateIR_Expr index
     let size = sizeOf type_
-    v' <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp (BOpInt IMul) t ind (IntIR size 4))
-    loc <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t arrV v')
+    v' <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp IMul t ind (IntIR size 4))
+    loc <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t arrV v')
     liftM VarIR $ emitIR_ToTemp size (\t -> IR_MemRead t loc)
 generateIR_Expr (EApp ty fExpr args) = do
     f <- generateIR_AppExpr fExpr ty
@@ -280,23 +280,23 @@ generateIR_Expr (EApp ty fExpr args) = do
     f xs
 generateIR_Expr (EUnaryOp _ op expr) = generateIR_UnOp op' expr
     where op' = case op of
-                  Neg _    -> UOpInt INeg
-                  Not _    -> UOpBool BNot
-                  BitNot _ -> UOpInt INot
+                  Neg _    -> INeg
+                  Not _    -> BNot
+                  BitNot _ -> IBitNot
 generateIR_Expr (EMul _ expr1 op expr2) = generateIR_BinOp op' expr1 expr2
     where op' = case op of
-                  Times _  -> BOpInt IMul
-                  Div _    -> BOpInt IDiv
-                  Mod _    -> BOpInt IMod
-                  LShift _ -> BOpInt ILshift
-                  RShift _ -> BOpInt IRshift
-                  BitAnd _ -> BOpInt IBitAnd
-                  BitOr _  -> BOpInt IBitOr
-                  BitXor _ -> BOpInt IBitXor
+                  Times _  -> IMul
+                  Div _    -> IDiv
+                  Mod _    -> IMod
+                  LShift _ -> ILshift
+                  RShift _ -> IRshift
+                  BitAnd _ -> IBitAnd
+                  BitOr _  -> IBitOr
+                  BitXor _ -> IBitXor
 generateIR_Expr (EAdd _ expr1 op expr2) = generateIR_BinOp op' expr1 expr2
     where op' = case op of
-                  Plus _  -> BOpInt IAdd
-                  Minus _ -> BOpInt ISub
+                  Plus _  -> IAdd
+                  Minus _ -> ISub
 generateIR_Expr e@(ERel _ _ _ _) = generateIR_BoolExpr e
 generateIR_Expr e@(EAnd _ _ _) = generateIR_BoolExpr e
 generateIR_Expr e@(EOr _ _ _) = generateIR_BoolExpr e
@@ -319,7 +319,7 @@ generateIR_Expr e@(ELambda ty args stmt) = do
     v <- generateIR_Expr_Alloc (EInt (Int ()) 16)
     emitIR (IR_MemSave v (LabelIR lambdaName) 8)
     when (n > 0) (do
-            v1 <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t v (IntIR 8 8))
+            v1 <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 8 8))
             v2 <- generateIR_Expr_Alloc (EInt (Int ()) (fromIntegral n))
             mapM_ (setupEnv mOffset mSize v2) freeVars
             emitIR (IR_MemSave v1 v2 8))
@@ -335,7 +335,7 @@ setupEnv mOffset mSize v x = do
     var <- liftM (!x) $ gets varenv
     let offset = mOffset ! x
     let size = mSize ! x
-    t <- liftM VarIR $ emitIR_ToTemp size (\t -> IR_BinOp (BOpInt IAdd) t v (IntIR offset 8))
+    t <- liftM VarIR $ emitIR_ToTemp size (\t -> IR_BinOp IAdd t v (IntIR offset 8))
     emitIR (IR_MemSave t (VarIR var) size)
 
 generateIR_Expr_Alloc :: Expr T -> GenerateIR ValIR
@@ -373,8 +373,8 @@ generateIR_LExpr (EArrAcc type_ arr expr) = do
     x <- generateIR_Expr arr
     ind <- generateIR_Expr expr
     let size = sizeOf type_
-    v' <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp (BOpInt IMul) t ind (IntIR size 4))
-    loc <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t x v')
+    v' <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp IMul t ind (IntIR size 4))
+    loc <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t x v')
     return (\v -> emitIR (IR_MemSave loc v size))
 generateIR_LExpr (EField _ expr field) =
     case exprType expr of
@@ -382,7 +382,7 @@ generateIR_LExpr (EField _ expr field) =
             x <- generateIR_Expr expr
             offset <- liftM ((!field) . (!cls)) $ gets fieldOffset
             size <- liftM ((!field) . (!cls)) $ gets fieldSize
-            y <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t x (IntIR offset 8))
+            y <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t x (IntIR offset 8))
             return (\v -> emitIR (IR_MemSave y v size))
       _ -> fail "error"
 
@@ -393,7 +393,7 @@ generateIR_AppExpr (EVar _ name) ty = do
       Just var -> return (\xs -> do
                                  let v = VarIR var
                                  fPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t v)
-                                 temp <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t v (IntIR 8 8))
+                                 temp <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 8 8))
                                  envPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t temp)
                                  liftM VarIR $ emitIR_ToTemp (sizeOf ty) (\t -> IR_Call t fPtr (xs ++ [envPtr]))
                          )
@@ -402,7 +402,7 @@ generateIR_AppExpr fExpr ty = do
     v <- generateIR_Expr fExpr
     return (\xs -> do
                    fPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t v)
-                   temp <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp (BOpInt IAdd) t v (IntIR 8 8))
+                   temp <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 8 8))
                    envPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t temp)
                    liftM VarIR $ emitIR_ToTemp (sizeOf ty) (\t -> IR_Call t fPtr (xs ++ [envPtr]))
            )
@@ -435,10 +435,10 @@ generateIR_BoolExpr expr = do
     let x = SVar t 1
     generateIR_JumpExpr expr lTrue lFalse
     emitIR (IR_Label lTrue)
-    emitIR (IR_Ass x (BoolIR True))
+    emitIR (IR_Ass x (IntIR 1 1))
     emitIR (IR_Jump lEnd)
     emitIR (IR_Label lFalse)
-    emitIR (IR_Ass x (BoolIR False))
+    emitIR (IR_Ass x (IntIR 0 1))
     emitIR (IR_Label lEnd)
     return (VarIR x)
 
