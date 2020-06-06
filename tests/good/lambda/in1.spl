@@ -1,0 +1,32 @@
+int main()
+{
+    int n = 10;
+    int(int)[] fs = new int(int)[n];
+
+    int i = 0;
+    while (i < n)
+    {
+        fs[i] = \int k -> return k + i; ;
+        i++;
+    }
+
+    int[] arr = new int[n];
+    i = 0;
+    while (i < n)
+    {
+        arr[i] = 0;
+        printInt(arr[i]);
+        i++;
+    }
+
+
+    i = 0;
+    while (i < n)
+    {
+        arr[i] = fs[i](arr[i]);
+        printInt(arr[i]);
+        i++;
+    }
+
+    return 0;
+}

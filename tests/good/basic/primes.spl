@@ -1,7 +1,7 @@
 int main()
 {
     int n = 2;
-    while (n < 1000)
+    while (n < 20)
     {
         int i = 2;
         bool isPrime = true;

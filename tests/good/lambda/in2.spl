@@ -1,0 +1,43 @@
+int foldl(int(int, int) f, int a, int[] arr, int n)
+{
+    int i = 0;
+    while (i < n)
+    {
+        a = f(a, arr[i]);
+        i++;
+    }
+
+    return a;
+}
+
+int sum(int[] arr, int n)
+{
+    int(int, int) f = \int a, int b -> { return a + b; };
+    return foldl(f, 0, arr, n);
+}
+
+int max(int[] arr, int n)
+{
+    int(int, int) f = \int a, int b -> {
+        if (a > b) { return a; } else { return b; }
+        } ;
+    return foldl(f, 0, arr, n);
+}
+
+int main()
+{
+    int n = 10;
+    int[] arr = new int[n];
+
+    int i = 0;
+    while (i < n)
+    {
+        arr[i] = i;
+        i++;
+    }
+
+    printInt(sum(arr, n));
+    printInt(max(arr, n));
+
+    return 0;
+}

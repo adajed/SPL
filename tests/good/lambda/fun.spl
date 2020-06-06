@@ -1,0 +1,9 @@
+int main()
+{
+    int(int, int) my_true = \ int t, int f -> { return t; };
+    int(int, int) my_false = \ int t, int f -> { return f; };
+    printInt(my_true(1, 2));
+    printInt(my_false(1, 2));
+
+    return 0;
+}

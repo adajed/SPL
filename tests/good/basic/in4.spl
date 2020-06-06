@@ -26,7 +26,7 @@ int sum_squares(int s, int e)
 
 int main()
 {
-    printInt(sum(100, 1000));
-    printInt(sum_squares(100, 1000));
+    printInt(sum(1, 10));
+    printInt(sum_squares(1, 10));
     return 0;
 }

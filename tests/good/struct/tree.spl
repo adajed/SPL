@@ -1,0 +1,69 @@
+class TreeInt
+{
+    int elem;
+    int numChildren;
+    TreeInt[] children;
+}
+
+class ListInt
+{
+    int elem;
+    ListInt next;
+}
+
+ListInt c(int head, ListInt tail)
+{
+    ListInt newlist = new ListInt;
+    newlist.elem = head;
+    newlist.next = tail;
+    return newlist;
+}
+
+ListInt prefix(TreeInt t)
+{
+    return prefix_2(t, null);
+}
+
+ListInt prefix_2(TreeInt t, ListInt acc)
+{
+    int i = t.numChildren - 1;
+    while (i >= 0)
+    {
+        acc = prefix_2(t.children[i], acc);
+        i--;
+    }
+    return c(t.elem, acc);
+}
+
+TreeInt node(int elem, TreeInt left, TreeInt right)
+{
+    TreeInt t = new TreeInt;
+    t.elem = elem;
+    t.numChildren = 2;
+    t.children = new TreeInt[2];
+    t.children[0] = left;
+    t.children[1] = right;
+    return t;
+}
+
+TreeInt leaf(int elem)
+{
+    TreeInt t = new TreeInt;
+    t.elem = elem;
+    t.numChildren = 0;
+    return t;
+}
+
+int main()
+{
+    TreeInt t = node(1, node(2, leaf(3), leaf(4)), node(5, leaf(6), leaf(7)));
+    ListInt l = prefix(t);
+
+    while (l != null)
+    {
+        printInt(l.elem);
+        l = l.next;
+    }
+
+    return 0;
+}

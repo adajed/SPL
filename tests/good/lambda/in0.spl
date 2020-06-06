@@ -1,0 +1,35 @@
+void fmap(int(int) f, int[] arr, int n)
+{
+    int i = 0;
+    while (i < n)
+    {
+        arr[i] = f(arr[i]);
+        i++;
+    }
+
+    return;
+}
+
+int main()
+{
+    int n = 10;
+    int[] arr = new int[n];
+    int i = 0;
+    while (i < n)
+    {
+        arr[i] = i;
+        printInt(arr[i]);
+        i++;
+    }
+
+    fmap(\int k -> return k * k; , arr, n);
+
+    i = 0;
+    while (i < n)
+    {
+        printInt(arr[i]);
+        i++;
+    }
+
+    return 0;
+}

@@ -3,8 +3,7 @@ SPL.cabal
 *~
 *.ir
 *.bak
-examples/*
-!examples/*.spl
+examples/
 
 lib/runtime.o
 spl
@@ -18,3 +17,4 @@ src/DocSPL.txt
 src/SkelSPL.hs
 
 .gdb_history
+
