@@ -6,6 +6,7 @@
 - array types
 - structs
 - functions
+- lambda expression
 - IR as quadruple code
 - optimizations
   + copy propagation
@@ -13,16 +14,15 @@
   + constant folding
   + local common subexpression elimination
   + arithmentic optimizations
-- generate basic assembler code
+  + global common subexpression elimination
+- generate assembler
+  + register allocation based on graph coloring
 
 TODO:
 - classes
 - virtual functions
-- lambda expression
 - algebraic types
 - optmizations
   + strength reduction
-  + global common subexpression elimination
 - assembler code
-  + register allocation
   + assembler code optimizations
