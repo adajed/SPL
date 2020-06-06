@@ -6,6 +6,7 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.List as L
 
+import AbsSPL
 import BasicBlock
 import CalculateLiveVars
 import CodeM
@@ -191,6 +192,13 @@ spill g cols = foldl spillVar g varsToSpill
     where varsToSpill = M.keys (M.filter (== Nothing) cols)
 
 spillVar :: BBGraph -> Node -> BBGraph
+spillVar g (NVar x@(SVar (VarA n) _)) = g { ids = ids' }
+    where ids' = M.map f (ids g)
+          f (BB (VIdent ".__START__") xs) = BB (VIdent ".__START__") c
+            where c = if n < 7
+                         then [IR_Store x] ++ (concat (map (spillIR x) xs))
+                         else concat (map (spillIR x) xs)
+          f (BB name xs) = BB name (concat (map (spillIR x) xs))
 spillVar g (NVar x) = g { ids = ids' }
     where ids' = M.map f (ids g)
           f (BB name xs) = BB name (concat (map (spillIR x) xs))
