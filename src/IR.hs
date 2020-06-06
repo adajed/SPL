@@ -100,6 +100,8 @@ data IR = IR_Label VIdent                    -- label
         | IR_Phi SVar [(Int, ValIR)]       -- phi function (for SSA)
         | IR_Nop                          -- no op
         | IR_Argument SVar                 -- argument from function
+        | IR_Store SVar
+        | IR_Load SVar
         deriving (Eq)
 instance Show IR where
     show ir = case ir of
@@ -118,5 +120,7 @@ instance Show IR where
                 IR_Phi x vs             -> c [show x, "=", "phi", show vs]
                 IR_Nop                  -> c ["nop"]
                 IR_Argument x           -> c ["arg", "(", show x, ")"]
+                IR_Store x              -> c ["store", show x]
+                IR_Load x               -> c ["load", show x]
             where c = intercalate " "
 

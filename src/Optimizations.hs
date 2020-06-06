@@ -17,7 +17,8 @@ import UnreachableCodeElimination
 
 optimize :: Map VIdent BBGraph -> Map VIdent BBGraph
 optimize program = iterateUntilFixpoint opts program
-    where opts = (Map.map optimizeBBGraph)
+    where opts = (Map.mapWithKey unreachableCodeElimination)
+               . (Map.map optimizeBBGraph)
 
 optimizeBBGraph :: BBGraph -> BBGraph
 optimizeBBGraph g = iterateUntilFixpoint opts g
@@ -29,8 +30,7 @@ optimizeBBGraph g = iterateUntilFixpoint opts g
                , copyPropagation
                , trivialPhiElimination
                , deadCodeElimination
-               , removeNop
-               , unreachableCodeElimination ]
+               , removeNop ]
 
 
 iterateUntilFixpoint :: Eq a => (a -> a) -> a -> a

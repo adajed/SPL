@@ -1,0 +1,17 @@
+int sum_squared(int a, int b, int c)
+{
+    return a * a + b * b + c * c;
+}
+
+int max(int a, int b)
+{
+    if (a > b)
+        return a;
+    return b;
+}
+
+int main()
+{
+    sum_squared(1, 2, 3);
+    return 0;
+}

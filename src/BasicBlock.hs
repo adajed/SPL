@@ -1,6 +1,6 @@
 module BasicBlock where
 
-import Data.Map as Map
+import qualified Data.Map as M
 
 import AbsSPL
 import IR
@@ -8,15 +8,15 @@ import IR
 data BasicBlock = BB VIdent [IR]
     deriving (Eq)
 
-data BBGraph = G { ids :: Map Int BasicBlock
-                 , next :: Map Int [Int]
-                 , prev :: Map Int [Int]
-                 , layout :: Map Int (Maybe Int)
+data BBGraph = G { ids    :: M.Map Int BasicBlock
+                 , next   :: M.Map Int [Int]
+                 , prev   :: M.Map Int [Int]
+                 , layout :: M.Map Int (Maybe Int)
                  , args :: [Int] }
     deriving (Eq)
 
-splitIntoBasicBlocks :: [IR] -> BBGraph
-splitIntoBasicBlocks ir = buildBBGraph (h [] 0 ir)
+splitIntoBasicBlocks :: VIdent -> [IR] -> BBGraph
+splitIntoBasicBlocks fName ir = buildBBGraph fName (h [] 0 ir)
     where h bbs _ [] = reverse bbs
           h bbs n xs = h ((BB name bb):bbs) n' xs'
             where (name, bb, xs', n') = getBasicBlock xs n
@@ -36,44 +36,41 @@ getBasicBlock' (x@(IR_Return _):xs) ys = ((x:ys), xs)
 getBasicBlock' (x@(IR_Label _):xs) ys = (ys, x:xs)
 getBasicBlock' (ir:xs) ys = getBasicBlock' xs (ir:ys)
 
-buildBBGraph :: [BasicBlock] -> BBGraph
-buildBBGraph bbs = G { ids = ids', next = next', prev = prev', layout = layout', args = args' }
-    where ids' = Map.fromList (zip [1..] bbs)
-          n = length bbs
-          layout' = Map.mapWithKey (\i _ -> if i == n then Nothing else Just (i+1)) ids'
-          ids_rev = Map.fromList (zip (Prelude.map (\(BB name _) -> name) bbs) [1..])
-          next' = Map.fromList (zip [1..] (Prelude.map (getNext ids_rev) bbs))
-          prev' = Map.fromList (zip [1..] (Prelude.map (getPrev ids_rev next') bbs))
+buildBBGraph :: VIdent -> [BasicBlock] -> BBGraph
+buildBBGraph fName bbs = G { ids = ids', next = next', prev = prev', layout = layout', args = args' }
+    where start = VIdent ".__START__"
+          bbs' = map (\(BB name xs) -> BB (if name == fName then start else name) xs) bbs
+          ids' = M.fromList (zip [1..] bbs')
+          n = length bbs'
+          layout' = M.mapWithKey (\i _ -> if i == n then Nothing else Just (i+1)) ids'
+          ids_rev = M.fromList (zip (map (\(BB name _) -> name) bbs') [1..])
+          next' = M.fromList (zip [1..] (map (getNext ids_rev) bbs'))
+          prev' = M.fromList (zip [1..] (map (getPrev ids_rev next') bbs'))
           takeArg ir = case ir of { IR_Argument (SVar _ s) -> [s] ; _ -> [] }
-          args' = concat (Prelude.map (\(BB _ xs) -> concat (Prelude.map takeArg xs)) bbs)
+          args' = concat (map (\(BB _ xs) -> concat (map takeArg xs)) bbs')
 
-getNext :: Map VIdent Int -> BasicBlock -> [Int]
+getNext :: M.Map VIdent Int -> BasicBlock -> [Int]
 getNext ids (BB name []) =
-    let n = ids ! name
-     in if n < (size ids) then [n+1] else []
+    let n = ids M.! name
+     in if n < (M.size ids) then [n+1] else []
 getNext ids (BB name xs) =
-    let n = ids ! name
-        next = if n < size ids then [n+1] else []
+    let n = ids M.! name
+        next = if n < M.size ids then [n+1] else []
      in case last xs of
-          IR_Jump label -> [ids ! label]
-          IR_CondJump _ _ _ label -> (ids ! label):next
+          IR_Jump label -> [ids M.! label]
+          IR_CondJump _ _ _ label -> (ids M.! label):next
           IR_Return _ -> []
           _ -> next
 
-getPrev :: Map VIdent Int -> Map Int [Int] -> BasicBlock -> [Int]
+getPrev :: M.Map VIdent Int -> M.Map Int [Int] -> BasicBlock -> [Int]
 getPrev ids next (BB name _) =
-    let n = ids ! name
-        next' = Map.toList next
-     in Prelude.map fst (Prelude.filter ((elem n) . snd) next')
+    let n = ids M.! name
+        next' = M.toList next
+     in map fst (filter ((elem n) . snd) next')
 
-flattenBBGraph :: BBGraph -> [BasicBlock]
-flattenBBGraph g = Prelude.map ((ids g) !) (l 1 [])
+flattenBBGraph :: BBGraph -> [Int]
+flattenBBGraph g = l 1 []
     where l :: Int -> [Int] -> [Int]
-          l i acc = case ((layout g) ! i) of
+          l i acc = case ((layout g) M.! i) of
                       Just j -> l j (i:acc)
                       Nothing -> reverse (i:acc)
-
-layoutBBGraph :: BBGraph -> ([IR], [Int])
-layoutBBGraph g = (tail (f (flattenBBGraph g)), args g)
-    where f :: [BasicBlock] -> [IR]
-          f bbs = concat (Prelude.map (\(BB name xs) -> (IR_Label name):xs) bbs)

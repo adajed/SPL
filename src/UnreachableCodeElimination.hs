@@ -1,40 +1,41 @@
 module UnreachableCodeElimination where
 
-import Data.Set as Set
-import Data.Map as Map
+import qualified Data.Map as M
+import qualified Data.Set as S
 
+import AbsSPL
 import BasicBlock
 import IR
 import OptimizationUtils
 
-unreachableCodeElimination :: BBGraph -> BBGraph
-unreachableCodeElimination g = g''
-    where g' = buildBBGraph (flattenBBGraph g)
+unreachableCodeElimination :: VIdent -> BBGraph -> BBGraph
+unreachableCodeElimination fName g = g''
+    where g' = buildBBGraph fName (map ((ids g) M.!) (flattenBBGraph g))
           ns = dfs g' 1
-          prev' = Map.map (Prelude.filter (`Set.member` ns)) (prev g')
-          layout' = Map.filterWithKey (\k -> \a -> Set.member k ns) (layout g')
-          layout'' = Map.mapWithKey (\k -> \a -> getNextLayout (layout g') ns k) layout'
-          g'' = G { ids = Map.filterWithKey (\k -> \a -> Set.member k ns) (ids g')
-                 , next = Map.filterWithKey (\k -> \a -> Set.member k ns) (next g')
-                 , prev = Map.filterWithKey (\k -> \a -> Set.member k ns) prev'
+          prev' = M.map (filter (`S.member` ns)) (prev g')
+          layout' = M.filterWithKey (\k -> \a -> S.member k ns) (layout g')
+          layout'' = M.mapWithKey (\k -> \a -> getNextLayout (layout g') ns k) layout'
+          g'' = G { ids = M.filterWithKey (\k -> \a -> S.member k ns) (ids g')
+                 , next = M.filterWithKey (\k -> \a -> S.member k ns) (next g')
+                 , prev = M.filterWithKey (\k -> \a -> S.member k ns) prev'
                  , layout = layout''
                  , args = args g
                  }
 
-getNextLayout :: Map Int (Maybe Int) -> Set Int -> Int -> Maybe Int
+getNextLayout :: M.Map Int (Maybe Int) -> S.Set Int -> Int -> Maybe Int
 getNextLayout m s i =
-    case m ! i of
+    case m M.! i of
       Nothing -> Nothing
-      Just j -> if Set.member j s
+      Just j -> if S.member j s
                    then Just j
                    else getNextLayout m s j
 
-dfs :: BBGraph -> Int -> Set Int
-dfs g n = dfs' Set.empty n
-    where dfs' :: Set Int -> Int -> Set Int
+dfs :: BBGraph -> Int -> S.Set Int
+dfs g n = dfs' S.empty n
+    where dfs' :: S.Set Int -> Int -> S.Set Int
           dfs' acc n =
-              if Set.member n acc
+              if S.member n acc
                  then acc
-                 else Prelude.foldl dfs' (Set.insert n acc) ((next g) ! n)
+                 else foldl dfs' (S.insert n acc) ((next g) M.! n)
 
 

@@ -6,7 +6,7 @@ import IR
 import Data.List ( intercalate )
 
 data Size = Byte | Word | DWord | QWord
-    deriving (Eq)
+    deriving (Eq, Ord)
 instance Show Size where
     show Byte  = "BYTE"
     show Word  = "WORD"
@@ -16,7 +16,11 @@ instance Show Size where
 data Reg = RegB Char   -- (rax, rbx, rcx, rdx)
          | RegS String -- (rdi, rsi, rbp, rsp)
          | RegN Int    -- (r8, ... , r15)
-         deriving (Eq)
+         deriving (Eq, Ord)
+instance Show Reg where
+    show (RegB c) = [c, 'x']
+    show (RegS s) = s
+    show (RegN n) = "r" ++ show n
 
 ax, bx, cx, dx :: Reg
 ax = RegB 'a'
@@ -60,7 +64,7 @@ data Val = VInt Int Size
          | VReg Reg Size
          | VMem Reg Int Size
          | VLabel VIdent
-         deriving (Eq)
+         deriving (Eq, Ord)
 instance Show Val where
     show (VInt n size)   = show size ++ " " ++ show n
     show (VLabel l)      = show l
@@ -70,6 +74,27 @@ instance Show Val where
                   | x > 0     = "+" ++ show x
                   | otherwise = show x
 
+isInt :: Val -> Bool
+isInt (VInt _ _) = True
+isInt _ = False
+
+isReg :: Val -> Bool
+isReg (VReg _ _) = True
+isReg _ = False
+
+isMem :: Val -> Bool
+isMem (VMem _ _ _) = True
+isMem _ = False
+
+isLabel :: Val -> Bool
+isLabel (VLabel _) = True
+isLabel _ = False
+
+takeSize :: Val -> Size
+takeSize (VInt _ s) = s
+takeSize (VReg _ s) = s
+takeSize (VMem _ _ s) = s
+takeSize (VLabel _) = QWord
 
 data Code = CAdd Val Val    -- add
           | CBitAnd Val Val -- bitwise and
@@ -78,7 +103,7 @@ data Code = CAdd Val Val    -- add
           | CDec Val        -- decrement
           | CUDiv Val       -- unsigned div
           | CIDiv Val       -- signed div
-          | CIMul Val       -- signed mul
+          | CIMul Val Val   -- signed mul
           | CInc Val        -- increment
           | CJump Val       -- jump
           | CCondJump IR.RelOp Val -- conditional jump
@@ -106,7 +131,7 @@ instance Show Code where
                   CDec a                -> c ["dec", show a]
                   CUDiv a               -> c ["div", show a]
                   CIDiv a               -> c ["idiv", show a]
-                  CIMul a               -> c ["imul", show a]
+                  CIMul a b             -> c ["imul", show a, ",", show b]
                   CInc a                -> c ["inc", show a]
                   CJump a               -> c ["jmp", show a]
                   CCondJump IR.LTH a    -> c ["jl", show a]
