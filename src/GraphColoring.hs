@@ -87,18 +87,26 @@ getVars vs = h vs []
           h ((VarIR x):xs) acc = h xs (x:acc)
           h (_:xs) acc = h xs acc
 
+paramCollision :: CollisionGraph -> (ValIR, Int) -> CollisionGraph
+paramCollision m (VarIR x, n) = M.adjust (S.union rs) (NVar x) m
+    where rn = argRegs L.!! (n - 1)
+          rs = S.fromList (map NReg (filter (/= rn) argRegs))
+paramCollision m _ = m
+
 customCollisions :: CollisionGraph -> (IR, S.Set SVar, S.Set SVar) -> CollisionGraph
 customCollisions m (IR_Call y f xs, set1, set2) =
     let adj m' x = M.adjust (S.insert (NReg ax)) x m'
         set2' = S.delete y set2 -- y can be in ax
         m1 = foldl adj m (map NVar (S.toList set2'))
     in customCollisions m1 (IR_VoidCall f xs, set1, set2)
-customCollisions m (IR_VoidCall _ _, set1, set2) =
-    let ys = S.toList (S.intersection set1 set2)
-        vars = map NVar ys
-        rs' = S.fromList (map NReg calleeSaveRegs)
-        adj m' x = M.adjust (S.union rs') x m'
-    in foldl adj m vars
+customCollisions m (IR_VoidCall f xs, set1, set2) =
+    let vars1 = map NVar (S.toList (S.intersection set1 set2))
+        rs1 = S.fromList (map NReg calleeSaveRegs)
+        adj1 m' x = M.adjust (S.union rs1) x m'
+        vars2 = map NVar (getVars (f:(drop 6 xs)))
+        rs2 = S.fromList (map NReg argRegs)
+        adj2 m' x = M.adjust (S.union rs2) x m'
+    in foldl paramCollision (foldl adj2 (foldl adj1 m vars1) vars2) (zip xs [1..6])
 customCollisions m (IR_BinOp IDiv x v1 v2, set1, set2) =
     let rs = S.fromList [NReg ax, NReg dx]
         adj m' x = M.adjust (S.union rs) x m'
