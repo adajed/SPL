@@ -14,7 +14,7 @@ single_test()
     ${PROGRAM} $_test 2>&1
     local _retcode=$?
     if [ ${_retcode} != 0 ]; then
-        echo -e "\e[31mSPL failed\e[39m"
+        echo -e "\e[31mTest failed\e[39m"
         test_output=0
     else
         if [ ! -f ${_exec}.in ]; then
@@ -24,10 +24,10 @@ single_test()
         fi
         true_out=$(cat ${_exec}.out)
         if [ "$out" == "$true_out" ]; then
-            echo -e "\e[32mSPL passed\e[39m"
+            echo -e "\e[32mTest passed\e[39m"
             test_output=1
         else
-            echo -e "\e[31mSPL failed\e[39m"
+            echo -e "\e[31mTest failed\e[39m"
             echo "Output:"
             echo $out
             echo ""
@@ -48,10 +48,10 @@ single_bad_test()
     ${PROGRAM} $_test 2>&1 >/dev/null
     _retcode=$?
     if [ ${_retcode} == 1 ]; then
-        echo -e "\e[32mSPL passed\e[39m"
+        echo -e "\e[32mTest passed\e[39m"
         test_output=1
     else
-        echo -e "\e[31mSPL failed\e[39m"
+        echo -e "\e[31mTest failed\e[39m"
         test_output=0
         rm ${_exec}.s ${_exec}.o ${_exec}
     fi
@@ -63,7 +63,7 @@ TEST_DIRS=(./tests/good/basic
            ./tests/good/lambda
            )
 
-BAD_TEST_DIRS=(./tests/bad
+BAD_TEST_DIRS=(./tests/bad/basic
                )
 
 FAILED_TESTS=()

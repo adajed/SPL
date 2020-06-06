@@ -9,7 +9,7 @@ import ErrM
 import Control.Monad
 import Control.Monad.State
 
-import Data.Map as Map
+import qualified Data.Map as M
 
 staticCheck :: Program FData -> Err (Program TType)
 staticCheck program = runCheckM (staticCheck_Program program)
@@ -62,10 +62,12 @@ staticCheck_TopDef :: TopDef FData -> CheckM (TopDef TType)
 staticCheck_TopDef (FnDef _ t name args (Bl _ stmts)) = doWithSavedEnv m
     where m = do
             modify (\s -> s { rettype = t })
+            modify (\s -> s { level = (level s) + 1 })
             mapM_ declareArg args
             stmts' <- mapM staticCheck_Stmt stmts
             let t' = toVoid t
             let args' = fmap toVoid args
+            modify (\s -> s { level = (level s) - 1 })
             return (FnDef voidT t' name args' (Bl voidT stmts'))
 staticCheck_TopDef t@(ClDef _ _ _) = return (toVoid t)
 
@@ -73,7 +75,9 @@ staticCheck_Stmt :: Stmt FData -> CheckM (Stmt TType)
 staticCheck_Stmt (Empty _) = return (Empty voidT)
 staticCheck_Stmt (BStmt _ (Bl _ stmts)) = doWithSavedEnv m
     where m = do
+            modify (\s -> s { level = (level s) + 1 })
             stmts' <- mapM staticCheck_Stmt stmts
+            modify (\s -> s { level = (level s) - 1 })
             return (BStmt voidT (Bl voidT stmts'))
 staticCheck_Stmt (Decl _ t items) = do
     items' <- mapM (staticCheck_Decl t) items
@@ -122,13 +126,13 @@ staticCheck_Stmt (SExp _ e) = do
 
 
 staticCheck_Decl :: TType -> Item FData -> CheckM (Item TType)
-staticCheck_Decl t (NoInit _ name) = do
-    declareVar name t
+staticCheck_Decl t (NoInit pos name) = do
+    declareVar pos name t
     return (NoInit voidT name)
-staticCheck_Decl t (Init _ name expr) = do
+staticCheck_Decl t (Init pos name expr) = do
     (expr', t') <- staticCheck_Expr expr
     assertTypesEqual t t'
-    declareVar name t
+    declareVar pos name t
     return (Init voidT name expr')
 
 staticCheck_LExpr :: Expr FData -> CheckM (Expr TType, TType)
@@ -149,10 +153,9 @@ staticCheck_Expr (EVar _ name) = do
 staticCheck_Expr (EField _ expr field) = do
     (expr', t') <- staticCheck_Expr expr
     cls <- tryGetClassName t'
-    classes <- gets fields
-    assert (Map.member cls classes) "Class doesn't exist"
-    assert (Map.member field (classes ! cls)) "Field doesn't exist"
-    let t = (classes ! cls) ! field
+    fields <- liftM fieldTypes $ getClassInfo cls
+    assert (M.member field fields) "Field doesn't exist"
+    let t = fields M.! field
     return (EField t expr' field, t)
 staticCheck_Expr (EArrAcc _ arrExpr indexExpr) = do
     (arrExpr', arrT) <- staticCheck_Expr arrExpr
@@ -218,8 +221,8 @@ staticCheck_Expr (EOr _ expr1 expr2) = do
     assertTypesEqual boolT t2
     return (EOr boolT expr1' expr2', boolT)
 staticCheck_Expr (EObjNew _ cls) = do
-    classes <- gets fields
-    assert (Map.member cls classes) "Class doesn't exist"
+    classes <- gets classEnv
+    assert (M.member cls classes) "Class doesn't exist"
     let t = Class () cls
     return (EObjNew t cls, t)
 staticCheck_Expr (EArrNew _ t expr) = do
@@ -229,10 +232,10 @@ staticCheck_Expr (EArrNew _ t expr) = do
     return (EArrNew newt (toVoid t) expr', newt)
 staticCheck_Expr (ELambda _ args stmt) = doWithSavedEnv m
     where m = do
-            mapM_ (\(Arg _ t x) -> declareVar x t) args
+            mapM_ (\(Arg pos t x) -> declareVar pos x t) args
             stmt' <- staticCheck_Stmt stmt
             tOut <- staticCheck_getRetExpr stmt
-            let ts = Prelude.map (\(Arg _ t _) -> t) args
+            let ts = map (\(Arg _ t _) -> t) args
             let t' = Fun () tOut ts
             let args' = fmap toVoid args
             return (ELambda t' args' stmt', t')
