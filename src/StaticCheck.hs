@@ -150,13 +150,18 @@ staticCheck_Expr (ENull _) = return (ENull nullT, nullT)
 staticCheck_Expr (EVar _ name) = do
     t <- getVariableType () name
     return (EVar t name, t)
-staticCheck_Expr (EField _ expr field) = do
+staticCheck_Expr (EField pos expr field) = do
     (expr', t') <- staticCheck_Expr expr
-    cls <- tryGetClassName t'
-    fields <- liftM fieldTypes $ getClassInfo cls
-    assert (M.member field fields) "Field doesn't exist"
-    let t = fields M.! field
-    return (EField t expr' field, t)
+    case t' of
+      Class _ cls -> do
+                     fields <- liftM fieldTypes $ getClassInfo cls
+                     assert (M.member field fields) "Field doesn't exist"
+                     let t = fields M.! field
+                     return (EField t expr' field, t)
+      Array _ _ -> do
+                   assert (field == VIdent "length") "Expected object"
+                   return (EField intT expr' field, intT)
+      _ -> errorMsg pos "Expected object"
 staticCheck_Expr (EArrAcc _ arrExpr indexExpr) = do
     (arrExpr', arrT) <- staticCheck_Expr arrExpr
     (indexExpr', indexT) <- staticCheck_Expr indexExpr

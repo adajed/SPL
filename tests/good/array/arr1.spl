@@ -4,7 +4,7 @@ int main()
     int[] arr = new int[n];
     int i = 0;
 
-    while (i < n)
+    while (i < arr.length)
     {
         arr[i] = arr[i] + arr[i] * arr[i];
         i++;

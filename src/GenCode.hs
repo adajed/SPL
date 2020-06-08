@@ -85,9 +85,14 @@ allocVarOnStack v@(SVar _ s) = do
     modify (\s -> s { varAddress = M.insert v n (varAddress s)
                     , offset = n })
 
-stackOffset :: Int -> Int
-stackOffset n = mod n' 16
-    where n' = 16 - mod n 16
+alignTo16 :: Int -> Int
+alignTo16 n = mod (16 - mod n 16) 16
+
+stackOffset :: Int -> GenCode Int
+stackOffset n = do
+    b <- gets useRbp
+    if b then return (alignTo16 n)
+         else return (alignTo16 (n + 8))
 
 -- generate code
 
@@ -102,14 +107,14 @@ genBBGraph g = do
     let bbs = map ((ids g') M.!) inds
     mapM_ allocVarOnStack (getSpilledVars g')
     n <- gets offset
-    let n' = n + stackOffset n
-    modify (\s -> s { offset = n' })
-    when (n' > 0) (do
-                   emit (CPush rbp)
-                   emit (CMov rbp rsp)
-                   emit (CSub rsp (VInt n' QWord))
-                   modify (\s -> s { useRbp = True })
-                  )
+    when (n > 0) (do
+                  emit (CPush rbp)
+                  emit (CMov rbp rsp)
+                  let n' = n + alignTo16 n
+                  modify (\s -> s { useRbp = True
+                                  , offset = n' })
+                  emit (CSub rsp (VInt n' QWord))
+                 )
     let usedCallerSaveRegs = S.filter (`elem` callerSaveRegs) (S.fromList (M.elems regAlloc))
     mapM_ (push . (`VReg` QWord)) usedCallerSaveRegs
     foldM_ declareArgFromStack (0, 7) (drop 6 (args g'))
@@ -347,9 +352,16 @@ genIR (IR_VoidCall f xs) = do
                 move r' v'
     mapM_ (uncurry h) (zip xs argRegs)
     let stackArgs = drop 6 xs
+    offset_ <- gets offset
+    let newoffset = offset_ + 8 * (length stackArgs)
+    align <- stackOffset newoffset
+    when (align > 0) (do
+                      emit (CSub rsp (VInt align QWord))
+                      modify (\s -> s { offset = (offset s) + align })
+                     )
     mapM_ (push <=< toVal) (reverse stackArgs)
     emit =<< liftM CCall (toVal f)
-    let n = 8 * length stackArgs
+    let n = align + 8 * length stackArgs
     when (n > 0) (do
                   emit (CAdd rsp (VInt n QWord))
                   modify (\s -> s { offset = (offset s) + n
