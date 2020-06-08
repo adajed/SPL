@@ -17,10 +17,11 @@ liftJoin2 :: Monad m => (a -> b -> m c) -> m a -> m b -> m c
 liftJoin2 f ma mb = join (liftM2 f ma mb)
 
 data SState = SState { code          :: [Code]
-                     , varAddress    :: M.Map SVar Val
+                     , varAddress    :: M.Map SVar Int
                      , regAllocation :: M.Map SVar Val
                      , offset        :: Int
                      , pushedRegs    :: [Val]
+                     , useRbp        :: Bool
                      }
 
 type GenCode = StateT SState Identity
@@ -32,6 +33,7 @@ execGenCode m = reverse (code (runIdentity (execStateT m state)))
                          , regAllocation = M.empty
                          , offset = 0
                          , pushedRegs = []
+                         , useRbp = False
                          }
 
 emit :: Code -> GenCode ()
@@ -52,7 +54,18 @@ getReg :: SVar -> GenCode Val
 getReg x = liftM (M.! x) $ gets regAllocation
 
 getAddress :: SVar -> GenCode Val
-getAddress x = liftM (M.! x) $ gets varAddress
+getAddress x@(SVar _ s) = do
+    b <- gets useRbp
+    maybe_n <- liftM (M.!? x) $ gets varAddress
+    let size = intToSize s
+    case maybe_n of
+      Just n ->
+          if b
+             then return (VMem bp (-n) size)
+             else do
+                  o <- gets offset
+                  return (VMem sp (o-n) size)
+      Nothing -> fail ("Cannot find var " ++ show x)
 
 getSpilledVars :: BBGraph -> S.Set SVar
 getSpilledVars g = S.unions (map go (M.elems (ids g)))
@@ -65,18 +78,16 @@ allocVarOnStack v@(SVar (VarA n) s) =
     if n > 6 then return ()
              else do
                   n <- liftM (+s) $ gets offset
-                  let size = intToSize s
-                  modify (\s -> s { varAddress = M.insert v (VMem bp (-n) size) (varAddress s)
+                  modify (\s -> s { varAddress = M.insert v n (varAddress s)
                                   , offset = n })
 allocVarOnStack v@(SVar _ s) = do
     n <- liftM (+s) $ gets offset
-    let size = intToSize s
-    modify (\s -> s { varAddress = M.insert v (VMem bp (-n) size) (varAddress s)
+    modify (\s -> s { varAddress = M.insert v n (varAddress s)
                     , offset = n })
 
 stackOffset :: Int -> Int
-stackOffset n = Prelude.mod n' 16
-    where n' = 16 - Prelude.mod n 16
+stackOffset n = mod n' 16
+    where n' = 16 - mod n 16
 
 -- generate code
 
@@ -96,16 +107,23 @@ genBBGraph g = do
     when (n' > 0) (do
                    emit (CPush rbp)
                    emit (CMov rbp rsp)
-                   emit (CSub rsp (VInt n' QWord)))
+                   emit (CSub rsp (VInt n' QWord))
+                   modify (\s -> s { useRbp = True })
+                  )
     let usedCallerSaveRegs = S.filter (`elem` callerSaveRegs) (S.fromList (M.elems regAlloc))
     mapM_ (push . (`VReg` QWord)) usedCallerSaveRegs
-    foldM_ declareArgFromStack (16, 7) (Prelude.drop 6 (args g'))
+    foldM_ declareArgFromStack (0, 7) (drop 6 (args g'))
     mapM_ genBasicBlock bbs
 
 moveArgToReg :: SVar -> Val -> GenCode ()
-moveArgToReg (SVar (VarA n) s) r = do
-    let r1 = VReg (argRegs L.!! (n-1)) (intToSize s)
-    move r r1
+moveArgToReg v@(SVar (VarA n) s) r =
+    if n <= 6
+       then do
+            let r1 = VReg (argRegs L.!! (n-1)) (intToSize s)
+            move r r1
+        else do
+            addr <- getAddress v
+            move r addr
 
 genBasicBlock :: BasicBlock -> GenCode ()
 genBasicBlock (BB (VIdent ".__START__") xs) = do
@@ -122,10 +140,10 @@ genBasicBlock (BB label xs) = do
 declareArgFromStack :: (Int, Int) -> Int -> GenCode (Int, Int)
 declareArgFromStack (n, i) s = do
     let a = (SVar (VarA i) s)
-    let size = intToSize s
-    let v = VMem bp n size
-    modify (\s -> s { varAddress = M.insert a v (varAddress s) })
-    return (n + s, i + 1)
+    b <- gets useRbp
+    let n' = if b then (-16 - n) else (-8 - n)
+    modify (\st -> st { varAddress = M.insert a n' (varAddress st) })
+    return (n + 8, i + 1)
 
 toVal :: ValIR -> GenCode Val
 toVal (IntIR n s) = return (VInt n (intToSize s))
@@ -136,8 +154,16 @@ move :: Val -> Val -> GenCode ()
 move v1 v2 = when (v1 /= v2) (emit (CMov v1 v2))
 
 push :: Val -> GenCode ()
-push v = do
-    modify (\s -> s { offset = (offset s) + sizeToInt (takeSize v)
+push v@(VInt n _) = do
+    modify (\s -> s { offset = (offset s) + 8
+                    , pushedRegs = v:(pushedRegs s) })
+    emit (CPush (VInt n DWord))
+push v@(VReg r _) = do
+    modify (\s -> s { offset = (offset s) + 8
+                    , pushedRegs = v:(pushedRegs s) })
+    emit (CPush (VReg r QWord))
+push v@(VLabel _) = do
+    modify (\s -> s { offset = (offset s) + 8
                     , pushedRegs = v:(pushedRegs s) })
     emit (CPush v)
 
@@ -150,9 +176,8 @@ leave :: GenCode ()
 leave = do
     regs <- gets pushedRegs
     mapM_ (emit . CPop) regs
-    n <- gets offset
-    let n' = n - sum (map (sizeToInt . takeSize) regs)
-    when (n' > 0) (emit CLeave)
+    b <- gets useRbp
+    when b (emit CLeave)
 
 toVMem :: Val -> Size -> Val
 toVMem (VReg r _) size = VMem r 0 size
@@ -321,7 +346,16 @@ genIR (IR_VoidCall f xs) = do
                 v' <- toVal v
                 move r' v'
     mapM_ (uncurry h) (zip xs argRegs)
+    let stackArgs = drop 6 xs
+    mapM_ (push <=< toVal) (reverse stackArgs)
     emit =<< liftM CCall (toVal f)
+    let n = 8 * length stackArgs
+    when (n > 0) (do
+                  emit (CAdd rsp (VInt n QWord))
+                  modify (\s -> s { offset = (offset s) + n
+                                  , pushedRegs = drop (length stackArgs) (pushedRegs s) })
+                 )
+
 
 -- jump
 genIR (IR_Jump label) = emit (CJump (VLabel label))

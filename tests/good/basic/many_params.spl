@@ -1,0 +1,55 @@
+int take1(int n1, int n2, int n3, int n4, int n5, int n6, int n7, int n8, int n9, int n10)
+{
+    return n1;
+}
+int take2(int n1, int n2, int n3, int n4, int n5, int n6, int n7, int n8, int n9, int n10)
+{
+    return n2;
+}
+int take3(int n1, int n2, int n3, int n4, int n5, int n6, int n7, int n8, int n9, int n10)
+{
+    return n3;
+}
+int take4(int n1, int n2, int n3, int n4, int n5, int n6, int n7, int n8, int n9, int n10)
+{
+    return n4;
+}
+int take5(int n1, int n2, int n3, int n4, int n5, int n6, int n7, int n8, int n9, int n10)
+{
+    return n5;
+}
+int take6(int n1, int n2, int n3, int n4, int n5, int n6, int n7, int n8, int n9, int n10)
+{
+    return n6;
+}
+int take7(int n1, int n2, int n3, int n4, int n5, int n6, int n7, int n8, int n9, int n10)
+{
+    return n7;
+}
+int take8(int n1, int n2, int n3, int n4, int n5, int n6, int n7, int n8, int n9, int n10)
+{
+    return n8;
+}
+int take9(int n1, int n2, int n3, int n4, int n5, int n6, int n7, int n8, int n9, int n10)
+{
+    return n9;
+}
+int take10(int n1, int n2, int n3, int n4, int n5, int n6, int n7, int n8, int n9, int n10)
+{
+    return n10;
+}
+
+int main()
+{
+    printInt(take1(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+    printInt(take2(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+    printInt(take3(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+    printInt(take4(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+    printInt(take5(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+    printInt(take6(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+    printInt(take7(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+    printInt(take8(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+    printInt(take9(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+    printInt(take10(1, 2, 3, 4, 5, 6, 7, 8, 9, 10));
+    return 0;
+}
