@@ -1,0 +1,8 @@
+int main()
+{
+    int[] arr = new int[10];
+
+    int x = arr.name;
+
+    return 0;
+}
