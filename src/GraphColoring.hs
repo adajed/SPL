@@ -30,12 +30,23 @@ colorBBGraph g =
     let liveVars = calculateLiveVars g
         allVars = S.unions (M.elems (M.map S.unions liveVars))
         collisionGraph = calculateCollisionGraph g liveVars
+        (collisionGraph', m) = coallesceGraph g collisionGraph
         costs = calculateSpillingCosts g allVars
-        colors = color collisionGraph costs
-      in if isAllColored colors
-            then (g, getColoring colors (map NVar (S.toList allVars)))
+        colors = color collisionGraph' costs
+        colors' = recreateColoring colors m
+      in if isAllColored colors'
+            then (g, getColoring colors' (map NVar (S.toList allVars)))
             else let g' = spill g colors
                   in colorBBGraph g'
+
+recreateColoring :: Coloring -> M.Map Node Node -> Coloring
+recreateColoring c m = foldl go c (M.keys m)
+    where go c' n = M.insert n (findColor c m n) c'
+
+findColor :: Coloring -> M.Map Node Node -> Node -> Maybe Int
+findColor c m n = case c M.!? n of
+                   Just color -> color
+                   Nothing -> findColor c m (m M.! n)
 
 getColoring :: Coloring -> [Node] -> M.Map SVar Reg
 getColoring c vs = M.fromList (map f vs)
@@ -227,3 +238,32 @@ calculateSpillCostForVar g x = sum (map costBB (M.elems (ids g)))
                      in n1 + n2
           costBB (BB _ xs) = sum (map cost xs)
 
+coallesceGraph :: BBGraph -> CollisionGraph -> (CollisionGraph, M.Map Node Node)
+coallesceGraph g c = foldl go (c, M.empty) xs
+    where xs = getIRAss g
+          go (coll, m) (x, y) =
+              if (M.notMember x coll) || (M.notMember y coll)
+                 then (coll, m)
+                 else if S.notMember x (coll M.! y)
+                         then let sc = (S.union (coll M.! x) (coll M.! y)) S.\\ (S.fromList [x, y])
+                                  n = S.filter ((>k) . S.size . (coll M.!)) sc
+                               in if S.size n < k
+                                     then let coll1 = M.delete y coll
+                                              coll2 = M.insert x sc coll1
+                                              coll3 = replace x y coll2
+                                              m1 = M.insert y x m
+                                           in (coll3, m1)
+                                     else (coll, m)
+                         else (coll, m)
+
+replace :: Node -> Node -> CollisionGraph -> CollisionGraph
+replace x y coll = M.map go coll
+    where go set = if S.member y set
+                      then S.insert x (S.delete y set)
+                      else set
+
+getIRAss :: BBGraph -> [(Node, Node)]
+getIRAss g = concat (map getIRAssBB (M.elems (ids g)))
+    where getIRAssBB (BB _ xs) = concat (map go xs)
+          go (IR_Ass x (VarIR y)) = [(NVar x, NVar y)]
+          go _ = []
