@@ -218,6 +218,20 @@ genIR (IR_Label label) = emit (CLabel (VLabel label))
 genIR (IR_Ass y v) = liftJoin2 move (getReg y) (toVal v)
 
 -- add
+genIR (IR_BinOp IAdd y v (IntIR 1 _)) = do
+    r_y <- getReg y
+    let size = takeSize r_y
+    r_v <- liftM (setSize size) $ toVal v
+    move r_y r_v
+    emit (CInc r_y)
+
+genIR (IR_BinOp IAdd y (IntIR 1 _) v) = do
+    r_y <- getReg y
+    let size = takeSize r_y
+    r_v <- liftM (setSize size) $ toVal v
+    move r_y r_v
+    emit (CInc r_y)
+
 genIR (IR_BinOp IAdd y v1 v2) = do
     r_y <- getReg y
     let size = takeSize r_y
@@ -232,6 +246,13 @@ genIR (IR_BinOp IAdd y v1 v2) = do
          emit (CAdd r_y r_v2)
 
 -- sub
+genIR (IR_BinOp ISub y v (IntIR 1 _)) = do
+    r_y <- getReg y
+    let size = takeSize r_y
+    r_v <- liftM (setSize size) $ toVal v
+    move r_y r_v
+    emit (CDec r_y)
+
 genIR (IR_BinOp ISub y v1 v2) = do
     r_y <- getReg y
     r_v1 <- toVal v1
