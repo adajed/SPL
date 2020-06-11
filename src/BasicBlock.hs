@@ -33,6 +33,7 @@ getBasicBlock' [] ys = (ys, [])
 getBasicBlock' (x@(IR_Jump _):xs) ys = ((x:ys), xs)
 getBasicBlock' (x@(IR_CondJump _ _ _ _):xs) ys = ((x:ys), xs)
 getBasicBlock' (x@(IR_Return _):xs) ys = ((x:ys), xs)
+getBasicBlock' (x@(IR_VoidReturn):xs) ys = ((x:ys), xs)
 getBasicBlock' (x@(IR_Label _):xs) ys = (ys, x:xs)
 getBasicBlock' (ir:xs) ys = getBasicBlock' xs (ir:ys)
 
@@ -60,6 +61,7 @@ getNext ids (BB name xs) =
           IR_Jump label -> [ids M.! label]
           IR_CondJump _ _ _ label -> (ids M.! label):next
           IR_Return _ -> []
+          IR_VoidReturn -> []
           _ -> next
 
 getPrev :: M.Map VIdent Int -> M.Map Int [Int] -> BasicBlock -> [Int]

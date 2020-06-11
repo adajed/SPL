@@ -51,7 +51,11 @@ setRegisterAllocation regMap = do
     modify (\s -> s { regAllocation = allocs })
 
 getReg :: SVar -> GenCode Val
-getReg x = liftM (M.! x) $ gets regAllocation
+getReg x = do
+    maybe_r <- liftM (M.!? x) $ gets regAllocation
+    case maybe_r of
+      Just r -> return r
+      Nothing -> fail $ "GenCode: Cannot find reg for " ++ show x
 
 getAddress :: SVar -> GenCode Val
 getAddress x@(SVar _ s) = do

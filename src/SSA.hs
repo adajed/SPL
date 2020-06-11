@@ -5,28 +5,29 @@ module SSA (
 import Control.Monad.Trans.State
 import Control.Monad.Identity
 
-import Data.Map as Map
-import Data.Set as Set
+import qualified Data.Map as M
+import qualified Data.Set as S
 
 import Debug.Trace as Trace
 
 import AbsSPL
 import BasicBlock
+import CalculateLiveVars ( calculateLiveVars )
 import ErrM
 import IR
 
-data SSAState = SSAState { vars :: Set SVar
-                         , lastVar :: Map Var Int
-                         , varMap :: Map Var Var
+data SSAState = SSAState { vars :: S.Set SVar
+                         , lastVar :: M.Map Var Int
+                         , varMap :: M.Map Var Var
                          , counter :: Int
                          }
 
 type SSA a = StateT SSAState Err a
 
 initialState :: SSAState
-initialState = SSAState { vars = Set.empty
-                        , lastVar = Map.empty
-                        , varMap = Map.empty
+initialState = SSAState { vars = S.empty
+                        , lastVar = M.empty
+                        , varMap = M.empty
                         , counter = 1
                         }
 
@@ -39,20 +40,20 @@ getNextCounter = do
 getVarCounter :: Var -> SSA Int
 getVarCounter var = do
     m <- gets lastVar
-    case m !? var of
+    case m M.!? var of
       Just i -> return i
       Nothing -> fail ("Cannot find var " ++ show var)
 
 incVarCounter :: Var -> SSA ()
 incVarCounter var = do
     i <- getNextCounter
-    let f = Map.insert var i
+    let f = M.insert var i
     modify (\s -> s { lastVar = f (lastVar s) })
 
 addVarIfNew :: Maybe SVar -> SSA ()
 addVarIfNew Nothing = return ()
 addVarIfNew (Just var) =
-    modify (\s -> s { vars = Set.insert var (vars s) })
+    modify (\s -> s { vars = S.insert var (vars s) })
 
 toSSA :: BBGraph -> Err BBGraph
 toSSA g = evalStateT (graphToSSA g) initialState
@@ -60,28 +61,24 @@ toSSA g = evalStateT (graphToSSA g) initialState
 graphToSSA :: BBGraph -> SSA BBGraph
 graphToSSA g = do
     let g' = moveArgsToStart g
-    setupAllVars g'
-    ids' <- mapM basicBlockToSSA (ids g')
-    let lastN = Map.map snd ids'
-    let g'' = g' { ids = Map.map fst ids' }
+    let liveVars = M.map head (calculateLiveVars g')
+    ids' <- mapM (uncurry basicBlockToSSA) (M.intersectionWith (,) (ids g') liveVars)
+    let lastN = M.map snd ids'
+    let g'' = g' { ids = M.map fst ids' }
     adjustPhi g'' lastN
 
 moveArgsToStart :: BBGraph -> BBGraph
 moveArgsToStart g = g''
-    where args = concat (Prelude.map getArgsBB (Map.elems (ids g)))
+    where args = concat (map getArgsBB (M.elems (ids g)))
           f (v@(SVar _ s), n) = IR_Ass v (VarIR (SVar (VarA n) s))
-          newargs = Prelude.map f (zip args [1..])
-          getArgsBB (BB _ xs) = concat (Prelude.map getArgsIR xs)
+          newargs = map f (zip args [1..])
+          getArgsBB (BB _ xs) = concat (map getArgsIR xs)
           getArgsIR ir = case ir of { (IR_Argument x) -> [x] ; _ -> [] }
           isArg ir = case ir of { (IR_Argument _) -> True ; _ -> False }
-          removeArgs (BB name xs) = BB name (Prelude.filter (not . isArg) xs)
+          removeArgs (BB name xs) = BB name (filter (not . isArg) xs)
           insertArgs (BB name xs) = BB name (newargs ++ xs)
-          g' = g { ids = Map.map removeArgs (ids g) }
-          g'' = g' { ids = Map.adjust insertArgs 1 (ids g') }
-
-setupAllVars :: BBGraph -> SSA ()
-setupAllVars g = mapM_ setupVars (Map.elems (ids g))
-    where setupVars (BB _ xs) = mapM_ (addVarIfNew . getVar) xs
+          g' = g { ids = M.map removeArgs (ids g) }
+          g'' = g' { ids = M.adjust insertArgs 1 (ids g') }
 
 getVar :: IR -> Maybe SVar
 getVar (IR_Ass x _) = Just x
@@ -91,50 +88,50 @@ getVar (IR_MemRead x _) = Just x
 getVar (IR_Call x _ _) = Just x
 getVar _ = Nothing
 
-getC :: Map Int (Map Var Int) -> Int -> Var -> SSA (Int, Var)
+getC :: M.Map Int (M.Map Var Int) -> Int -> Var -> SSA (Int, Var)
 getC m i v = do
-    x <- liftM (!v) $ gets varMap
-    unless (Map.member i m) (fail "Cannot find i")
-    unless (Map.member x (m ! i)) (fail ("Cannot find var " ++ show x))
-    let n = (m ! i) ! x
+    x <- liftM (M.! v) $ gets varMap
+    unless (M.member i m) (fail "Cannot find i")
+    unless (M.member x (m M.! i)) (fail ("Cannot find var " ++ show x))
+    let n = (m M.! i) M.! x
     return (i, VarT n)
 
-prevs :: Map Int (Map Var Int) -> [Int] -> Var -> SSA [(Int, Var)]
+prevs :: M.Map Int (M.Map Var Int) -> [Int] -> Var -> SSA [(Int, Var)]
 prevs m xs v = mapM (\i -> getC m i v) xs
 
-modifyPhi :: Map Int (Map Var Int) -> [Int] -> IR -> SSA IR
+modifyPhi :: M.Map Int (M.Map Var Int) -> [Int] -> IR -> SSA IR
 modifyPhi m xs (IR_Phi (SVar v s) _) = do
     ys <- prevs m xs v
-    let ys' = Prelude.map (\(i, v') -> (i, VarIR (SVar v' s))) ys
+    let ys' = map (\(i, v') -> (i, VarIR (SVar v' s))) ys
     return (IR_Phi (SVar v s) ys')
 modifyPhi m xs ir = return ir
 
 
-adjustPhi :: BBGraph -> Map Int (Map Var Int) -> SSA BBGraph
+adjustPhi :: BBGraph -> M.Map Int (M.Map Var Int) -> SSA BBGraph
 adjustPhi g lastN = do
     let f (n, (BB name xs)) = do
-                              unless (Map.member n (prev g)) (fail "Cannot find n")
-                              xs' <- mapM (modifyPhi lastN ((prev g) ! n)) xs
+                              unless (M.member n (prev g)) (fail "Cannot find n")
+                              xs' <- mapM (modifyPhi lastN ((prev g) M.! n)) xs
                               return (n, BB name xs')
-    ids' <- mapM f (Map.assocs (ids g))
-    return (g { ids = Map.fromList ids' })
+    ids' <- mapM f (M.assocs (ids g))
+    return (g { ids = M.fromList ids' })
 
-basicBlockToSSA :: BasicBlock -> SSA (BasicBlock, Map Var Int)
-basicBlockToSSA (BB label xs) = do
-    vs <- liftM Set.toList $ gets vars
-    modify (\s -> s { lastVar = Map.empty })
+basicBlockToSSA :: BasicBlock -> S.Set SVar -> SSA (BasicBlock, M.Map Var Int)
+basicBlockToSSA (BB label xs) vars = do
+    modify (\s -> s { lastVar = M.empty })
     let phi (SVar var size) = do
             i <- getNextCounter
-            modify (\s -> s { lastVar = Map.insert var i (lastVar s) })
-            modify (\s -> s { varMap = Map.insert (VarT i) var (varMap s) })
+            modify (\s -> s { lastVar = M.insert var i (lastVar s) })
+            modify (\s -> s { varMap = M.insert (VarT i) var (varMap s) })
             return (IR_Phi (SVar (VarT i) size) [])
-    xphi <- mapM phi vs
+    xphi <- mapM phi (S.toList vars)
     xs' <- mapM irToSSA xs
     m <- gets lastVar
     return (BB label (xphi ++ xs'), m)
 
 
 irToSSA :: IR -> SSA IR
+irToSSA (IR_Label l) = return (IR_Label l)
 irToSSA (IR_Ass x v) = do
     v' <- valueToSSA v
     x' <- varToSSA x
@@ -165,6 +162,7 @@ irToSSA (IR_VoidCall f xs) = do
     f' <- valueToSSA f
     xs' <- mapM valueToSSA xs
     return (IR_VoidCall f' xs')
+irToSSA (IR_Jump l) = return (IR_Jump l)
 irToSSA (IR_CondJump v1 op v2 label) = do
     v1' <- valueToSSA v1
     v2' <- valueToSSA v2
@@ -172,21 +170,23 @@ irToSSA (IR_CondJump v1 op v2 label) = do
 irToSSA (IR_Return v) = do
     v' <- valueToSSA v
     return (IR_Return v')
-irToSSA ir = return ir
+irToSSA (IR_VoidReturn) = return IR_VoidReturn
+irToSSA (IR_Nop) = return IR_Nop
+
 
 valueToSSA :: ValIR -> SSA ValIR
+valueToSSA v@(VarIR (SVar (VarA _) _)) = return v
 valueToSSA (VarIR (SVar var size)) = do
-    m <- gets lastVar
-    case m !? var of
+    m <- liftM (M.!? var) $ gets lastVar
+    case m of
       Just i -> return (VarIR (SVar (VarT i) size))
-      Nothing -> return (VarIR (SVar var size))
+      Nothing -> fail $ "Cannot find var: " ++ show var
 valueToSSA v = return v
 
 varToSSA :: SVar -> SSA SVar
 varToSSA (SVar var size) = do
     incVarCounter var
     i <- getVarCounter var
-    modify (\s -> s { varMap = Map.insert (VarT i) var (varMap s) })
+    modify (\s -> s { varMap = M.insert (VarT i) var (varMap s) })
     return (SVar (VarT i) size)
-
 

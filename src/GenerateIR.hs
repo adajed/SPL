@@ -6,8 +6,9 @@ import IR
 
 import FreeVariables ( getFreeVars, substitute )
 
-import Data.Map as Map
-import Data.Set as Set
+import qualified Data.Map as M
+import qualified Data.Set as S
+import qualified Data.List as L
 
 import Control.Monad ( liftM, foldM, when, unless, void )
 import Control.Monad.Trans ( lift )
@@ -17,22 +18,26 @@ import Control.Monad.Trans.Writer
 
 type Offset = Int
 
+type T = Type ()
+
+data ClassInfo = ClassInfo { classSize   :: Int
+                           , fieldOffset :: M.Map VIdent Offset
+                           , fieldSize   :: M.Map VIdent Int
+                           , fieldType   :: M.Map VIdent T
+                           }
+
 data SState = SState { tempCounter :: Int
                      , levelCounter :: Int
                      , labelCounter :: Int
-                     , fieldOffset :: Map CIdent (Map VIdent Offset)
-                     , fieldSize :: Map CIdent (Map VIdent Int)
-                     , classSize :: Map CIdent Int
-                     , varenv :: Map VIdent SVar
-                     , output :: Map VIdent [IR]
+                     , classInfo :: M.Map CIdent ClassInfo
+                     , varenv :: [M.Map VIdent (SVar, T)]
+                     , output :: M.Map VIdent [IR]
                      , currentOutput :: [IR]
                      , lambdas :: [(Type T, VIdent, [Argument T], Stmt T)]
                      , lambdaCounter :: Int
                      }
 
 type GenerateIR a = StateT SState Err a
-
-type T = Type ()
 
 sizeOf :: Type a -> Int
 sizeOf (Int _) = 4
@@ -48,17 +53,15 @@ initialSState :: SState
 initialSState = SState { tempCounter  = 0
                        , levelCounter = 0
                        , labelCounter = 0
-                       , classSize = Map.empty
-                       , fieldOffset = Map.empty
-                       , fieldSize = Map.empty
-                       , varenv = Map.empty
-                       , output = Map.empty
+                       , classInfo = M.empty
+                       , varenv = []
+                       , output = M.empty
                        , currentOutput = []
                        , lambdas = []
                        , lambdaCounter = 0
                        }
 
-runGenerateIR :: Program T -> Err (Map VIdent [IR])
+runGenerateIR :: Program T -> Err (M.Map VIdent [IR])
 runGenerateIR program = liftM output $ execStateT m initialSState
     where m = generateIR_Program program
 
@@ -86,35 +89,54 @@ getFreshTemp = do
 
 declareVar :: T -> VIdent -> GenerateIR SVar
 declareVar t name = do
-    level <- getsSState levelCounter
-    let varName = VIdent (show name ++ "_" ++ show level)
-    let v = SVar (VarN varName) (sizeOf t)
-    modifySState (\s -> s { varenv = Map.insert name v (varenv s) } )
+    l <- gets levelCounter
+    let name' = VIdent (show name ++ "_" ++ show l)
+    let v = SVar (VarN name') (sizeOf t)
+    env <- liftM ((M.insert name (v, t)) . head) $ gets varenv
+    modifySState (\s -> s { varenv = env:(tail (varenv s)) } )
     return v
 
 declareTopDef :: TopDef T -> GenerateIR ()
 declareTopDef (FnDef _ _ name _ _) = return ()
 declareTopDef (ClDef _ name args) =
-    let (size, offsets, sizes) = generateOffsets args
-        insertOffsets = Map.insert name (Map.fromList offsets)
-        insertSizes = Map.insert name (Map.fromList sizes)
-        insertSize = Map.insert name size
-     in modify (\s -> s { fieldOffset = insertOffsets (fieldOffset s)
-                        , fieldSize = insertSizes (fieldSize s)
-                        , classSize = insertSize (classSize s) })
+    let info = generateOffsets args
+     in modify (\s -> s { classInfo = M.insert name info (classInfo s) })
 
-generateOffsets :: [ClassArgument T] -> (Int, [(VIdent, Offset)], [(VIdent, Int)])
-generateOffsets args = Prelude.foldl h (0, [], []) args
-    where h acc (Field _ t xs) = Prelude.foldl (h' (sizeOf t)) acc xs
-          h' size (n, ys, zs) name = (n + size, ((name, n):ys), ((name, size):zs))
+generateOffsets :: [ClassArgument T] -> ClassInfo
+generateOffsets args = foldl h initInfo args
+    where initInfo = ClassInfo { classSize = 4, fieldType = M.empty, fieldOffset = M.empty, fieldSize = M.empty }
+          h :: ClassInfo -> ClassArgument T -> ClassInfo
+          h acc (Field _ t xs) = foldl (h' (sizeOf t) (fmap (const ()) t)) acc xs
+          h' :: Int -> T -> ClassInfo -> VIdent -> ClassInfo
+          h' size t acc name = ClassInfo { classSize = (classSize acc) + size
+                                         , fieldType = M.insert name t (fieldType acc)
+                                         , fieldOffset = M.insert name (classSize acc) (fieldOffset acc)
+                                         , fieldSize = M.insert name size (fieldSize acc)
+                                         }
 
+
+getMaybeVar :: VIdent -> GenerateIR (Maybe SVar)
+getMaybeVar name = do
+    let f [] = return Nothing
+        f (e:es) = if M.member name e
+                      then return (Just (fst (e M.! name)))
+                      else f es
+    f =<< gets varenv
 
 getVar :: VIdent -> GenerateIR SVar
 getVar name = do
-    env <- getsSState varenv
-    case env !? name of
-      Nothing -> fail ("Variable not declared: " ++ show name)
-      Just x -> return x
+    x <- getMaybeVar name
+    case x of
+      Just var -> return var
+      Nothing -> errorVariableNotDeclared name
+
+getVarType :: VIdent -> GenerateIR T
+getVarType name = do
+    let f [] = errorVariableNotDeclared name
+        f (e:es) = if M.member name e
+                      then return (snd (e M.! name))
+                      else f es
+    f =<< gets varenv
 
 getFreshLabel :: GenerateIR VIdent
 getFreshLabel = do
@@ -131,13 +153,32 @@ defaultValue (Bool _) = IntIR 0 1
 defaultValue (Void _) = VoidIR
 defaultValue (Class _ _) = IntIR 0 8
 defaultValue (Array _ _) = IntIR 0 8
+defaultValue (Fun _ _ _) = IntIR 0 8
 defaultValue _ = IntIR 0 4
+
+errorVariableNotDeclared :: VIdent -> GenerateIR a
+errorVariableNotDeclared name =
+    fail ("Variable " ++ show name ++ " not declared")
+
+pushEmptyEnv :: GenerateIR ()
+pushEmptyEnv = modify (\s -> s { levelCounter = (levelCounter s) + 1
+                               , varenv = M.empty:(varenv s)} )
+
+popEnv :: GenerateIR (M.Map VIdent (SVar, T))
+popEnv = do
+    env <- liftM head $ gets varenv
+    modify (\s -> s { levelCounter = (levelCounter s) - 1
+                    , varenv = tail (varenv s) })
+    return env
 
 generateIR_Program :: Program T -> GenerateIR ()
 generateIR_Program (Prog t topdefs) = do
     mapM_ declareTopDef topdefs
-    mapM_ (generateIR_TopDef True) topdefs
+    mapM_ generateIR_TopDef topdefs
     generateIR_lambda
+    classNames <- liftM M.keys $ gets classInfo
+    mapM_ generateIR_Destructor classNames
+    mapM_ generateIR_Constructor classNames
 
 generateIR_lambda :: GenerateIR ()
 generateIR_lambda = do
@@ -146,43 +187,185 @@ generateIR_lambda = do
       [] -> return ()
       ((t, name, args, stmt):ls) -> do
                                 modify (\s -> s { lambdas = tail (lambdas s) })
-                                generateIR_TopDef False (FnDef (Void ()) t name args (Bl (Void ()) [stmt]))
+                                generateIR_TopDef (FnDef (Void ()) t name args (Bl (Void ()) [stmt]))
                                 generateIR_lambda
 
-generateIR_TopDef :: Bool -> TopDef T -> GenerateIR ()
-generateIR_TopDef addEnv (FnDef _ t name args (Bl _ stmts)) = do
-    modifySState (\s -> s { currentOutput = [] } )
-    env <- getsSState varenv
+generateIR_TopDef :: TopDef T -> GenerateIR ()
+generateIR_TopDef (FnDef _ t name args bl) = do
+    modify (\s -> s { currentOutput = [] } )
     emitIR (IR_Label name)
-    let envArg = Arg (Void ()) (Void (Void ())) (VIdent "")
-    let args' = if addEnv then args ++ [envArg] else args
-    mapM_ declareArg args'
-    modifySState (\s -> s { levelCounter = (levelCounter s) + 1 } )
-    mapM_ generateIR_Stmt stmts
-    modifySState (\s -> s { levelCounter = (levelCounter s) - 1
-                          , varenv = env
-                          , output = Map.insert name ((reverse . currentOutput) s) (output s) } )
-generateIR_TopDef _ (ClDef _ _ _) = return ()
+    pushEmptyEnv
+    mapM_ declareArg args
+    generateIR_Stmt (BStmt (Void ()) bl)
+    void popEnv
+    modify (\s -> s { output = M.insert name ((reverse . currentOutput) s) (output s) } )
+generateIR_TopDef (ClDef _ _ _) = return ()
 
 declareArg :: Argument T -> GenerateIR ()
 declareArg (Arg _ t name) = do
     var <- declareVar (fmap (const ()) t) name
     emitIR (IR_Argument var)
 
+destuctorName :: CIdent -> VIdent
+destuctorName cls = VIdent ("__" ++ show cls ++ "_destructor")
+
+constructorName :: CIdent -> VIdent
+constructorName cls = VIdent ("__" ++ show cls ++ "_constructor")
+
+isFreeable :: T -> Bool
+isFreeable (Int ()) = False
+isFreeable (Bool ()) = False
+isFreeable _ = True
+
+decreaseRefCount :: ValIR -> GenerateIR ValIR
+decreaseRefCount x = do
+    cnt <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_MemRead t x)
+    newcnt <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp ISub t cnt (IntIR 1 4))
+    emitIR (IR_MemSave x newcnt 4)
+    return newcnt
+
+releaseObject :: T -> ValIR -> GenerateIR ()
+releaseObject (Int ()) _ = return ()
+releaseObject (Bool ()) _ = return ()
+releaseObject (Null ()) _ = return ()
+releaseObject t@(Class _ cls) x =
+    if L.isPrefixOf "env__class__" (show cls)
+       then return ()
+       else let f = LabelIR (destuctorName cls)
+             in emitIR (IR_VoidCall f [x])
+releaseObject t@(Array _ ty) x = do
+    l <- getFreshLabel
+    emitIR (IR_CondJump x IR.EQU (IntIR 0 8) l)
+    refcnt <- decreaseRefCount x
+    emitIR (IR_CondJump refcnt IR.NEQ (IntIR 0 4) l)
+    when (isFreeable ty) (do
+            arr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t x (IntIR 8 8))
+            size' <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t x (IntIR 4 8))
+            size <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_MemRead t size')
+            i <- emitIR_ToTemp 4 (\t -> IR_Ass t (IntIR 0 4))
+            l1 <- getFreshLabel
+            l2 <- getFreshLabel
+            emitIR (IR_Jump l2)
+            emitIR (IR_Label l1)
+            pos <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp IMul t (VarIR i) (IntIR (sizeOf ty) 4))
+            y' <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t arr pos)
+            y <- liftM VarIR $ emitIR_ToTemp (sizeOf ty) (\t -> IR_MemRead t y')
+            releaseObject ty y
+            i' <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp IAdd t (VarIR i) (IntIR 1 4))
+            emitIR (IR_Ass i i')
+            emitIR (IR_Label l2)
+            emitIR (IR_CondJump (VarIR i) IR.LTH size l1)
+                         )
+    emitIR (IR_VoidCall (LabelIR (VIdent "freeMemory")) [x])
+    emitIR (IR_Label l)
+releaseObject t@(Fun _ _ _) x = do
+    l <- getFreshLabel
+    emitIR (IR_CondJump x IR.EQU (IntIR 0 8) l)
+    refcnt <- decreaseRefCount x
+    emitIR (IR_CondJump refcnt IR.NEQ (IntIR 0 4) l)
+    fPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t x (IntIR 20 8))
+    f <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t fPtr)
+    cPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t x (IntIR 12 8))
+    c <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t cPtr)
+    emitIR (IR_VoidCall f [c])
+    emitIR (IR_VoidCall (LabelIR (VIdent "freeMemory")) [x])
+    emitIR (IR_Label l)
+
+acquireObject :: T -> ValIR -> GenerateIR ()
+acquireObject (Int ()) _ = return ()
+acquireObject (Bool ()) _ = return ()
+acquireObject (Null ()) _ = return ()
+acquireObject t x = do
+    l <- getFreshLabel
+    emitIR (IR_CondJump x IR.EQU (IntIR 0 8) l)
+    cnt <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_MemRead t x)
+    newcnt <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp IAdd t cnt (IntIR 1 4))
+    emitIR (IR_MemSave x newcnt 4)
+    emitIR (IR_Label l)
+
+
+generateIR_Destructor :: CIdent -> GenerateIR ()
+generateIR_Destructor cls = do
+    let fName = destuctorName cls
+    modify (\s -> s { currentOutput = [] })
+    emitIR (IR_Label fName)
+    pushEmptyEnv
+    let varName = VIdent "obj"
+    var <- declareVar (Class () cls) varName
+    let x = VarIR var
+    emitIR (IR_Argument var)
+    l <- getFreshLabel
+    emitIR (IR_CondJump x IR.NEQ (IntIR 0 8) l)
+    emitIR IR_VoidReturn
+    emitIR (IR_Label l)
+    cnt <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_MemRead t x)
+    newcnt <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp ISub t cnt (IntIR 1 4))
+    emitIR (IR_MemSave x newcnt 4)
+    l <- getFreshLabel
+    emitIR (IR_CondJump newcnt IR.EQU (IntIR 0 4) l)
+    emitIR IR_VoidReturn
+    emitIR (IR_Label l)
+    info <- liftM (M.! cls) $ gets classInfo
+    mapM_ (freeField info x) (M.keys (fieldSize info))
+    let free = LabelIR (VIdent "freeMemory")
+    emitIR (IR_VoidCall free [x])
+    emitIR IR_VoidReturn
+    void popEnv
+    modify (\s -> s { output = M.insert fName ((reverse . currentOutput) s) (output s) } )
+
+freeField :: ClassInfo -> ValIR -> VIdent -> GenerateIR ()
+freeField info obj name = do
+    let offset = (fieldOffset info) M.! name
+    let t = (fieldType info) M.! name
+    x' <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t obj (IntIR offset 8))
+    x <- liftM VarIR $ emitIR_ToTemp (sizeOf t) (\t -> IR_MemRead t x')
+    releaseObject t x
+
+
+generateIR_Constructor :: CIdent -> GenerateIR ()
+generateIR_Constructor cls = do
+    let fName = constructorName cls
+    modify (\s -> s { currentOutput = [] })
+    emitIR (IR_Label fName)
+    pushEmptyEnv
+    size <- liftM (classSize . (M.! cls)) $ gets classInfo
+    v <- generateIR_Expr_Alloc (EInt (Int ()) (toInteger size))
+    emitIR (IR_MemSave v (IntIR 0 4) 4)
+    info <- liftM (M.! cls) $ gets classInfo
+    mapM_ (initField info v) (M.keys (fieldSize info))
+    emitIR (IR_Return v)
+    void popEnv
+    modify (\s -> s { output = M.insert fName ((reverse . currentOutput) s) (output s) } )
+
+initField :: ClassInfo -> ValIR -> VIdent -> GenerateIR ()
+initField info obj name = do
+    let offset = (fieldOffset info) M.! name
+    let t = (fieldType info) M.! name
+    let v = defaultValue t
+    x' <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t obj (IntIR offset 8))
+    emitIR (IR_MemSave x' v (sizeOf t))
+
+releaseWholeStack :: GenerateIR ()
+releaseWholeStack = do
+    envs <- gets varenv
+    let m env = mapM_ (\(x, t) -> releaseObject t (VarIR x)) (M.elems env)
+    mapM_ m envs
+
 generateIR_Stmt :: Stmt T -> GenerateIR ()
 generateIR_Stmt (Empty _) = return ()
 generateIR_Stmt (BStmt _ (Bl _ stmts)) = do
-    env <- getsSState varenv
-    modifySState (\s -> s { levelCounter = (levelCounter s) + 1 } )
+    pushEmptyEnv
     mapM_ generateIR_Stmt stmts
-    modifySState (\s -> s { levelCounter = (levelCounter s) - 1 } )
-    modifySState (\s -> s { varenv = env } )
+    env <- popEnv
+    mapM_ (\(x, t) -> releaseObject t (VarIR x)) (M.elems env)
 generateIR_Stmt (Decl _ t items) = do
     mapM_ (generateIR_Decl (fmap (const ()) t)) items
-generateIR_Stmt (Ass _ expr1 expr2) = do
+generateIR_Stmt (Ass t expr1 expr2) = do
+    releaseObject (exprType expr1) =<< generateIR_Expr expr1
     fAss <- generateIR_LExpr expr1
     value <- generateIR_Expr expr2
     fAss value
+    acquireObject (exprType expr2) value
 generateIR_Stmt (Incr _ expr) = do
     value <- generateIR_Expr expr
     f <- generateIR_LExpr expr
@@ -195,8 +378,11 @@ generateIR_Stmt (Decr _ expr) = do
     f (VarIR temp)
 generateIR_Stmt (Ret _ expr) = do
     value <- generateIR_Expr expr
+    acquireObject (exprType expr) value
+    releaseWholeStack
     emitIR (IR_Return value)
 generateIR_Stmt (VRet _) = do
+    releaseWholeStack
     emitIR IR_VoidReturn
 generateIR_Stmt (Cond _ expr stmt) = do
     lTrue <- getFreshLabel
@@ -237,6 +423,7 @@ generateIR_Decl t (NoInit _ name) = do
 generateIR_Decl t (Init _ name expr) = do
     var <- declareVar t name
     temp <- generateIR_Expr expr
+    acquireObject (exprType expr) temp
     emitIR (IR_Ass var temp)
 
 
@@ -256,31 +443,33 @@ generateIR_Expr (EInt _ n) = return (IntIR (fromInteger n) 4)
 generateIR_Expr (ETrue _) = return (IntIR 1 1)
 generateIR_Expr (EFalse _) = return (IntIR 0 1)
 generateIR_Expr (ENull _) = return (IntIR 0 8)
-generateIR_Expr (EVar _ name) = liftM (VarIR . (! name)) $ gets varenv
+generateIR_Expr (EVar _ name) = liftM VarIR $ getVar name
 generateIR_Expr (EField _ expr field) =
     case exprType expr of
       Class _ cls -> do
             x <- generateIR_Expr expr
-            offset <- liftM ((!field) . (!cls)) $ gets fieldOffset
-            size <- liftM ((!field) . (!cls)) $ gets fieldSize
+            offset <- liftM ((M.! field) . fieldOffset . (M.! cls)) $ gets classInfo
+            size <- liftM ((M.! field) . fieldSize . (M.! cls)) $ gets classInfo
             y <- emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t x (IntIR offset 8))
             z <- emitIR_ToTemp size (\t -> IR_MemRead t (VarIR y))
             return (VarIR z)
       Array _ _ -> do -- accessing length of array
             x <- generateIR_Expr expr
-            liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_MemRead t x)
+            x' <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp IAdd t x (IntIR 4 8))
+            liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_MemRead t x')
       _ -> fail "error"
 generateIR_Expr expr@(EArrAcc type_ arr index) = do
     arrV <- generateIR_Expr arr
     ind <- generateIR_Expr index
     let size = sizeOf type_
-    arrV' <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t arrV (IntIR 4 8))
+    arrV' <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t arrV (IntIR 8 8))
     v' <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp IMul t ind (IntIR size 4))
     loc <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t arrV' v')
     liftM VarIR $ emitIR_ToTemp size (\t -> IR_MemRead t loc)
 generateIR_Expr (EApp ty fExpr args) = do
     f <- generateIR_AppExpr fExpr ty
     xs <- mapM generateIR_Expr args
+    mapM_ (uncurry acquireObject) (zip (map exprType args) xs)
     f xs
 generateIR_Expr (EUnaryOp _ op expr) = generateIR_UnOp op' expr
     where op' = case op of
@@ -304,46 +493,51 @@ generateIR_Expr (EAdd _ expr1 op expr2) = generateIR_BinOp op' expr1 expr2
 generateIR_Expr e@(ERel _ _ _ _) = generateIR_BoolExpr e
 generateIR_Expr e@(EAnd _ _ _) = generateIR_BoolExpr e
 generateIR_Expr e@(EOr _ _ _) = generateIR_BoolExpr e
-generateIR_Expr (EObjNew t cls) = do
-    size <- liftM (!cls) $ gets classSize
-    generateIR_Expr_Alloc (EInt (Int ()) (toInteger size))
+generateIR_Expr (EObjNew t cls) =
+    let f = LabelIR (constructorName cls)
+     in liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_Call t f [])
 generateIR_Expr (EArrNew tt t expr) = do
     let n = fromIntegral (sizeOf t)
-    let size = EAdd (Int ()) (EMul (Int ()) expr (Times tt) (EInt (Int ()) n)) (Plus tt) (EInt (Int ()) 4)
+    let size = EAdd (Int ()) (EMul (Int ()) expr (Times tt) (EInt (Int ()) n)) (Plus tt) (EInt (Int ()) 8)
     v <- generateIR_Expr_Alloc size
     t <- generateIR_Expr expr
-    emitIR (IR_MemSave v t 4)
+    v' <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 4 8))
+    emitIR (IR_MemSave v' t 4)
+    emitIR (IR_MemSave v (IntIR 0 4) 4)
     return v
 generateIR_Expr e@(ELambda ty args stmt) = do
-    let freeVars = Set.toList (getFreeVars (Ret (Void ()) e))
-    (n, mOffset, mSize) <- foldM buildOffsets (0, Map.empty, Map.empty) freeVars
+    let freeVars = S.toList (getFreeVars (Ret (Void ()) e))
+    let initInfo = ClassInfo { classSize = 4, fieldSize = M.empty, fieldOffset = M.empty, fieldType = M.empty }
+    info <- foldM buildOffsets initInfo freeVars
     lambdaN <- gets lambdaCounter
     modify (\s -> s { lambdaCounter = lambdaN + 1 })
     let envName = CIdent ("env__class__" ++ show lambdaN)
     let env = VIdent ("__env__" ++ show lambdaN)
     let lambdaName = VIdent ("__lambda__" ++ show lambdaN)
-    modify (\s -> s { fieldOffset = Map.insert envName mOffset (fieldOffset s) })
-    modify (\s -> s { fieldSize = Map.insert envName mSize (fieldSize s) })
-    modify (\s -> s { classSize = Map.insert envName n (classSize s) })
-    v <- generateIR_Expr_Alloc (EInt (Int ()) 16)
-    emitIR (IR_MemSave v (LabelIR lambdaName) 8)
-    when (n > 0) (do
-            v1 <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 8 8))
-            v2 <- generateIR_Expr_Alloc (EInt (Int ()) (fromIntegral n))
-            mapM_ (setupEnv mOffset mSize v2) freeVars
-            emitIR (IR_MemSave v1 v2 8))
+    modify (\s -> s { classInfo = M.insert envName info (classInfo s) })
+    v <- generateIR_Expr_Alloc (EInt (Int ()) 28)
+    emitIR (IR_MemSave v (IntIR 0 4) 4)
+    lPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 4 8))
+    emitIR (IR_MemSave lPtr (LabelIR lambdaName) 8)
+    v1 <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 12 8))
+    v2 <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_Call t (LabelIR (constructorName envName)) [])
+    mapM_ (setupEnv (fieldOffset info) (fieldSize info) v2) freeVars
+    emitIR (IR_MemSave v1 v2 8)
+    lPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 20 8))
+    let destrName = destuctorName envName
+    emitIR (IR_MemSave lPtr (LabelIR destrName) 8)
     let envType = Class (Void ()) envName
-    let stmt' = substitute envType env (Set.fromList freeVars) stmt
+    let stmt' = substitute envType env (S.fromList freeVars) stmt
     let tOut = case ty of { Fun _ t _ -> fmap (const (Void ())) t; _ -> Void (Void ()) }
     let envArg = Arg (Void ()) envType env
     addLambda tOut lambdaName (args ++ [envArg]) stmt'
     return v
 
-setupEnv :: Map VIdent Offset -> Map VIdent Int -> ValIR -> VIdent -> GenerateIR ()
+setupEnv :: M.Map VIdent Offset -> M.Map VIdent Int -> ValIR -> VIdent -> GenerateIR ()
 setupEnv mOffset mSize v x = do
-    var <- liftM (!x) $ gets varenv
-    let offset = mOffset ! x
-    let size = mSize ! x
+    var <- getVar x
+    let offset = mOffset M.!  x
+    let size = mSize M.!  x
     t <- liftM VarIR $ emitIR_ToTemp size (\t -> IR_BinOp IAdd t v (IntIR offset 8))
     emitIR (IR_MemSave t (VarIR var) size)
 
@@ -353,12 +547,15 @@ generateIR_Expr_Alloc expr = do
     v <- generateIR_Expr expr
     liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_Call t fname [v])
 
-type ClassInfo = (Int, Map VIdent Offset, Map VIdent Int)
 buildOffsets :: ClassInfo -> VIdent -> GenerateIR ClassInfo
-buildOffsets (n, mOffset, mSize) x = do
-    var <- liftM (!x) $ gets varenv
-    case var of
-      SVar _ i -> return (n + i, Map.insert x n mOffset, Map.insert x i mSize)
+buildOffsets info x = do
+    t <- getVarType x
+    let size = sizeOf t
+    return (ClassInfo { classSize = (classSize info) + size
+                      , fieldSize = M.insert x size (fieldSize info)
+                      , fieldOffset = M.insert x (classSize info) (fieldOffset info)
+                      , fieldType = M.insert x t (fieldType info)
+                      })
 
 
 generateIR_UnOp :: UnOp -> Expr T -> GenerateIR ValIR
@@ -376,13 +573,13 @@ generateIR_BinOp op expr1 expr2 = do
 
 generateIR_LExpr :: Expr T -> GenerateIR (ValIR -> GenerateIR ())
 generateIR_LExpr (EVar _ name) = do
-    x <- getVar name
-    return (\v -> emitIR (IR_Ass x v))
+    var <- getVar name
+    return (\v -> emitIR (IR_Ass var v))
 generateIR_LExpr (EArrAcc type_ arr expr) = do
     x <- generateIR_Expr arr
     ind <- generateIR_Expr expr
     let size = sizeOf type_
-    x' <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t x (IntIR 4 8))
+    x' <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t x (IntIR 8 8))
     v' <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp IMul t ind (IntIR size 4))
     loc <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t x' v')
     return (\v -> emitIR (IR_MemSave loc v size))
@@ -390,31 +587,33 @@ generateIR_LExpr (EField _ expr field) =
     case exprType expr of
       Class _ cls -> do
             x <- generateIR_Expr expr
-            offset <- liftM ((!field) . (!cls)) $ gets fieldOffset
-            size <- liftM ((!field) . (!cls)) $ gets fieldSize
+            offset <- liftM ((M.! field) . fieldOffset . (M.! cls)) $ gets classInfo
+            size <- liftM ((M.! field) . fieldSize . (M.! cls)) $ gets classInfo
             y <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t x (IntIR offset 8))
             return (\v -> emitIR (IR_MemSave y v size))
       _ -> fail "error"
 
 generateIR_AppExpr :: Expr T -> T -> GenerateIR ([ValIR] -> GenerateIR ValIR)
 generateIR_AppExpr (EVar _ name) ty = do
-    v <- liftM (!? name) $ gets varenv
+    v <- getMaybeVar name
     case v of
       Just var -> return (\xs -> do
                                  let v = VarIR var
-                                 fPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t v)
-                                 temp <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 8 8))
+                                 fPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 4 8))
+                                 f <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t fPtr)
+                                 temp <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 12 8))
                                  envPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t temp)
-                                 liftM VarIR $ emitIR_ToTemp (sizeOf ty) (\t -> IR_Call t fPtr (xs ++ [envPtr]))
+                                 liftM VarIR $ emitIR_ToTemp (sizeOf ty) (\t -> IR_Call t f (xs ++ [envPtr]))
                          )
       Nothing -> return (\xs -> liftM VarIR $ emitIR_ToTemp (sizeOf ty) (\t -> IR_Call t (LabelIR name) xs))
 generateIR_AppExpr fExpr ty = do
     v <- generateIR_Expr fExpr
     return (\xs -> do
-                   fPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t v)
-                   temp <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 8 8))
+                   fPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 4 8))
+                   f <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t fPtr)
+                   temp <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 12 8))
                    envPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_MemRead t temp)
-                   liftM VarIR $ emitIR_ToTemp (sizeOf ty) (\t -> IR_Call t fPtr (xs ++ [envPtr]))
+                   liftM VarIR $ emitIR_ToTemp (sizeOf ty) (\t -> IR_Call t f (xs ++ [envPtr]))
            )
 
 generateIR_JumpExpr :: Expr T -> VIdent -> VIdent -> GenerateIR ()
@@ -469,4 +668,5 @@ exprType (EAnd t _ _) = t
 exprType (EOr t _ _) = t
 exprType (EObjNew t _) = t
 exprType (EArrNew t _ _) = t
+exprType (ELambda t _ _) = t
 
