@@ -28,7 +28,7 @@ allColors = map Just [1..k]
 colorBBGraph :: BBGraph -> (BBGraph, M.Map SVar Reg)
 colorBBGraph g =
     let liveVars = calculateLiveVars g
-        allVars = S.unions (M.elems (M.map S.unions liveVars))
+        allVars = getAllVarsBBGraph g
         collisionGraph = calculateCollisionGraph g liveVars
         (collisionGraph', m) = coallesceGraph g collisionGraph
         costs = calculateSpillingCosts g allVars
@@ -38,6 +38,33 @@ colorBBGraph g =
             then (g, getColoring colors' (map NVar (S.toList allVars)))
             else let g' = spill g colors
                   in colorBBGraph g'
+
+getAllVarsBBGraph :: BBGraph -> S.Set SVar
+getAllVarsBBGraph g = S.unions (map getAllVarsBB (M.elems (ids g)))
+    where getAllVarsBB (BB _ xs) = S.unions (map getAllVarsIR xs)
+          getAllVarsIR (IR_Label _) = S.empty
+          getAllVarsIR (IR_Ass x v) = getVarsIR [VarIR x, v]
+          getAllVarsIR (IR_BinOp _ x v1 v2) = getVarsIR [VarIR x, v1, v2]
+          getAllVarsIR (IR_UnOp _ x v) = getVarsIR [VarIR x, v]
+          getAllVarsIR (IR_MemRead x v) = getVarsIR [VarIR x, v]
+          getAllVarsIR (IR_MemSave v1 v2 _) = getVarsIR [v1, v2]
+          getAllVarsIR (IR_Call y f xs) = getVarsIR ((VarIR y):f:xs)
+          getAllVarsIR (IR_VoidCall f xs) = getVarsIR (f:xs)
+          getAllVarsIR (IR_Return v) = getVarsIR [v]
+          getAllVarsIR (IR_VoidReturn) = S.empty
+          getAllVarsIR (IR_Jump _) = S.empty
+          getAllVarsIR (IR_CondJump v1 _ v2 _) = getVarsIR [v1, v2]
+          getAllVarsIR (IR_Nop) = S.empty
+          getAllVarsIR (IR_Argument x) = getVarsIR [VarIR x]
+          getAllVarsIR (IR_Store x) = getVarsIR [VarIR x]
+          getAllVarsIR (IR_Load x) = getVarsIR [VarIR x]
+
+getVarsIR :: [ValIR] -> S.Set SVar
+getVarsIR vs = S.unions (map getVar vs)
+
+getVar :: ValIR -> S.Set SVar
+getVar (VarIR x) = S.singleton x
+getVar _ = S.empty
 
 recreateColoring :: Coloring -> M.Map Node Node -> Coloring
 recreateColoring c m = foldl go c (M.keys m)
@@ -57,7 +84,7 @@ getColoring c vs = M.fromList (map f vs)
 calculateCollisionGraph :: BBGraph -> BBLiveVars -> CollisionGraph
 calculateCollisionGraph graph liveVars = g''
     where collisions = concat (M.elems liveVars)
-          allVars = S.toList (S.unions collisions)
+          allVars = S.toList (getAllVarsBBGraph graph)
           initMap = M.fromList (zip (map NVar allVars) (repeat S.empty))
           f m c = foldl h m (pairs (map NVar (S.toList c)))
           h m (x1, x2) = ins x1 x2 (ins x2 x1 m)
@@ -154,7 +181,7 @@ color g costs =
         then initColoring
         else let v = case getNode g of
                        Just v' -> v'
-                       Nothing -> takeMinCost g costs
+                       Nothing -> chooseValueToSpll g costs
                  g' = remove v g
                  m  = color g' costs
                  c = getColor v g m
@@ -171,10 +198,11 @@ getAllVars g = filter isNVar (M.keys g)
     where isNVar (NVar _) = True
           isNVar (NReg _) = False
 
-takeMinCost :: CollisionGraph -> M.Map Node Int -> Node
-takeMinCost g costs = snd (foldl f (head cs) (tail cs))
-    where cs = map (\n -> (costs M.! n, n)) (getAllVars g)
-          f (ix, x) (iy, y) = if iy < ix then (iy, y) else (ix, x)
+-- chooses node with highest number of neighbours
+chooseValueToSpll :: CollisionGraph -> M.Map Node Int -> Node
+chooseValueToSpll g costs = snd (foldl f (head cs) (tail cs))
+    where cs = map (\n -> (S.size (g M.! n), n)) (getAllVars g)
+          f (ix, x) (iy, y) = if iy > ix then (iy, y) else (ix, x)
 
 getNode :: CollisionGraph -> Maybe Node
 getNode g = maybe_head ys
