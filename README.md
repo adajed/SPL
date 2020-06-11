@@ -39,9 +39,12 @@ make
   + register allocation based on graph coloring
   + generating assembler for nasm
   + linking with help of gcc
+- garbage collector based on refcount
 
 TODO:
 - language features
+  + basic types (char, float, string)
+  + basic IO utils
   + classes
   + virtual functions
   + algebraic types
@@ -51,7 +54,7 @@ TODO:
   + tail recursion
 - assembler code
   + assembler code optimizations
-  
+
 ## Tests
 To run tests just execute:
 `
