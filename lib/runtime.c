@@ -10,3 +10,8 @@ char* allocMemory(int size)
 {
     return (char*) malloc(size * sizeof(char));
 }
+
+void freeMemory(void* ptr)
+{
+    free(ptr);
+}

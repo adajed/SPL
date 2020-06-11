@@ -1,7 +1,6 @@
 class TreeInt
 {
     int elem;
-    int numChildren;
     TreeInt[] children;
 }
 
@@ -26,7 +25,7 @@ ListInt prefix(TreeInt t)
 
 ListInt prefix_2(TreeInt t, ListInt acc)
 {
-    int i = t.numChildren - 1;
+    int i = t.children.length - 1;
     while (i >= 0)
     {
         acc = prefix_2(t.children[i], acc);
@@ -39,7 +38,6 @@ TreeInt node(int elem, TreeInt left, TreeInt right)
 {
     TreeInt t = new TreeInt;
     t.elem = elem;
-    t.numChildren = 2;
     t.children = new TreeInt[2];
     t.children[0] = left;
     t.children[1] = right;
@@ -50,7 +48,7 @@ TreeInt leaf(int elem)
 {
     TreeInt t = new TreeInt;
     t.elem = elem;
-    t.numChildren = 0;
+    t.children = new TreeInt[0];
     return t;
 }
 
