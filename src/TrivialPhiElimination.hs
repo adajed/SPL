@@ -1,6 +1,7 @@
 module TrivialPhiElimination where
 
-import Data.Map as Map
+import qualified Data.Map as M
+import qualified Data.Set as S
 
 import BasicBlock
 import IR
@@ -13,22 +14,13 @@ trivialPhiElimination =
             trivialPhiElimination_zero
 
 trivialPhiElimination_zero :: BBGraph -> BBGraph
-trivialPhiElimination_zero g =
-    let phi (IR_Phi _ []) = True
-        phi ir = False
-        g' = mapIR (\ir -> if phi ir then IR_Nop else ir) g
-        ir = concat (Prelude.map (\(BB _ xs) -> Prelude.filter phi xs) (Map.elems (ids g)))
-     in Prelude.foldl remove g' ir
-
-remove :: BBGraph -> IR -> BBGraph
-remove g (IR_Phi x []) = mapIR f g
-    where f (IR_Phi x' vs) = IR_Phi x' (Prelude.filter (not . (==(VarIR x)) . snd) vs)
+trivialPhiElimination_zero = mapIR f
+    where f (IR_Phi _ []) = IR_Nop
           f ir = ir
-remove g _ = g
 
 trivialPhiElimination_loop :: BBGraph -> BBGraph
 trivialPhiElimination_loop = mapIR f
-    where f (IR_Phi x vs) = IR_Phi x (Prelude.filter ((/= (VarIR x)) . snd) vs)
+    where f (IR_Phi x vs) = IR_Phi x (filter ((/= (VarIR x)) . snd) vs)
           f ir = ir
 
 trivialPhiElimination_allTheSame :: BBGraph -> BBGraph
@@ -36,4 +28,3 @@ trivialPhiElimination_allTheSame = mapIR f
     where f ir@(IR_Phi x ((_, v):vs)) =
             if all ((==v) . snd) vs then IR_Ass x v else ir
           f ir = ir
-

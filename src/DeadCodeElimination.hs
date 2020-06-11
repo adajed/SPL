@@ -50,6 +50,7 @@ isVarUsed g x = any f (Map.elems (ids g))
 uses :: ValIR -> IR -> Bool
 uses v ir =
     case ir of
+      IR_Label _            -> False
       IR_Ass _ v'           -> v == v'
       IR_BinOp _ _ v1 v2    -> v1 == v || v2 == v
       IR_UnOp _ _ v'        -> v == v'
@@ -58,7 +59,9 @@ uses v ir =
       IR_Call _ v' vs'      -> v == v' || any (==v) vs'
       IR_VoidCall v' vs'    -> v == v' || any (==v) vs'
       IR_Return v'          -> v == v'
+      IR_VoidReturn         -> False
+      IR_Jump _             -> False
       IR_CondJump v1 _ v2 _ -> v1 == v || v2 == v
       IR_Phi _ vs           -> any ((==v) . snd) vs
-      ir'                   -> False
+      IR_Nop                -> False
 

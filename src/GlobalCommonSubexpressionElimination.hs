@@ -20,7 +20,7 @@ elimPairs :: [Int] -> BBGraph -> BBGraph
 elimPairs xs g = foldl (doElimPair (last xs)) g c
     where ir1 = getIR g (head xs)
           ir2 = getIR g (last xs)
-          c = filter (canElimPair . h) (pairs ir1 ir2)
+          c = take_head (filter (canElimPair . h) (pairs ir1 ir2))
           h ((_, a), (_, b)) = (a, b)
 
 canElimPair :: (IR, IR) -> Bool
@@ -45,7 +45,7 @@ elimTriples :: [Int] -> BBGraph -> BBGraph
 elimTriples xs g = foldl (doElimTriple (last xs)) g c
     where ir1 = getIR g (head xs)
           ir2 = getIR g (last xs)
-          c = filter (canElimTriple . h) (triples ir1 ir2)
+          c = take_head (filter (canElimTriple . h) (triples ir1 ir2))
           h (a, b, (_, c)) = (a, b, c)
 
 
@@ -88,7 +88,7 @@ elimMemory path g = foldl (doElimMemory (last path)) g c
     where ir1 = getIR g (head path)
           ir2 = getIR g (last path)
           ir = concat (map (getIR g) (middle path))
-          c = filter (canElimMemory ir1 ir ir2) (pairs ir1 ir2)
+          c = take_head (filter (canElimMemory ir1 ir ir2) (pairs ir1 ir2))
 
 canElimMemory :: [IR] -> [IR] -> [IR] -> (Ind IR, Ind IR) -> Bool
 canElimMemory irH irM irT ((n1, IR_MemRead _ v)
@@ -118,6 +118,16 @@ doElimMemory :: Int -> BBGraph -> (Ind IR, Ind IR) -> BBGraph
 doElimMemory i g ((_, IR_MemRead x _)
                  ,(p, IR_MemRead x' _)) =
     changeBBGraph i p (IR_Ass x' (VarIR x)) g
+doElimMemory i g ((p, IR_MemSave _ _ _)
+                 ,(_, IR_MemSave _ _ _)) =
+    changeBBGraph i p IR_Nop g
+doElimMemory i g ((_, IR_MemSave _ v _)
+                 ,(p, IR_MemRead x _)) =
+    changeBBGraph i p (IR_Ass x v) g
+doElimMemory i g ((_, IR_MemRead _ _)
+                 ,(p, IR_MemSave _ _ _)) =
+    changeBBGraph i p IR_Nop g
+doElimMemory _ g _ = g
 
 noMemSave :: [IR] -> Bool
 noMemSave = not . (any f)
@@ -158,3 +168,6 @@ getIR :: BBGraph -> Int -> [IR]
 getIR g i = f ((ids g) Map.! i)
     where f (BB _ xs) = xs
 
+take_head :: [a] -> [a]
+take_head [] = []
+take_head (x:xs) = [x]

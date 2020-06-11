@@ -22,15 +22,14 @@ optimize program = iterateUntilFixpoint opts program
 
 optimizeBBGraph :: BBGraph -> BBGraph
 optimizeBBGraph g = iterateUntilFixpoint opts g
-    where opts = Prelude.foldl (.) id fs
-          fs = [ globalCommonSubexpressionElimination
-               , localCommonSubexpressionElimination
-               , constantFolding
-               , arithmeticOptimizations
-               , copyPropagation
-               , trivialPhiElimination
-               , deadCodeElimination
-               , removeNop ]
+    where opts = removeNop
+               . globalCommonSubexpressionElimination
+               . localCommonSubexpressionElimination
+               . arithmeticOptimizations
+               . deadCodeElimination
+               . trivialPhiElimination
+               . copyPropagation
+               . constantFolding
 
 
 iterateUntilFixpoint :: Eq a => (a -> a) -> a -> a
