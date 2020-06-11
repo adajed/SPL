@@ -20,11 +20,12 @@ make
 `
 
 ## Features
-- basic types (int, bool)
-- array types
-- structs
-- functions
-- lambda expression
+- language features
+  + basic types (int, bool)
+  + array types
+  + structs
+  + functions (with recursion)
+  + lambda expression
 - IR as quadruple code
 - optimizations
   + copy propagation
@@ -40,12 +41,14 @@ make
   + linking with help of gcc
 
 TODO:
-- classes
-- virtual functions
-- algebraic types
+- language features
+  + classes
+  + virtual functions
+  + algebraic types
 - optmizations
   + strength reduction
   + layout optimization
+  + tail recursion
 - assembler code
   + assembler code optimizations
   
