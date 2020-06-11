@@ -1,6 +1,5 @@
 module SSA (
-    toSSA,
-    removePhi
+    toSSA
            ) where
 
 import Control.Monad.Trans.State
@@ -189,28 +188,5 @@ varToSSA (SVar var size) = do
     i <- getVarCounter var
     modify (\s -> s { varMap = Map.insert (VarT i) var (varMap s) })
     return (SVar (VarT i) size)
-
-removePhi :: BBGraph -> BBGraph
-removePhi g = Prelude.foldl f g' phis
-    where isPhi ir = case ir of { (IR_Phi _ _) -> True ; _ -> False }
-          getPhis (BB _ xs) = Prelude.filter isPhi xs
-          phis = concat (Prelude.map getPhis (Map.elems (ids g)))
-          h (BB name xs) = BB name (Prelude.filter (not . isPhi) xs)
-          g' = g { ids = Map.map h (ids g) }
-          f g (IR_Phi x vs) = insertPhiEquivalence x vs g
-          f g _ = g
-
-insertPhiEquivalence :: SVar -> [(Int, ValIR)] -> BBGraph -> BBGraph
-insertPhiEquivalence x vs g = Prelude.foldl f g vs
-    where f g (i, v) = if v == VarIR x then g
-                                      else insertAtTheEnd i (IR_Ass x v) g
-
-insertAtTheEnd :: Int -> IR -> BBGraph -> BBGraph
-insertAtTheEnd i ir g = g { ids = Map.adjust f i (ids g) }
-    where f (BB name []) = BB name [ir]
-          f (BB name xs) = case last xs of
-                             IR_Jump l -> BB name ((init xs) ++ [ir, IR_Jump l])
-                             IR_CondJump v1 op v2 l -> BB name ((init xs) ++ [ir, IR_CondJump v1 op v2 l])
-                             _ -> BB name (xs ++ [ir])
 
 

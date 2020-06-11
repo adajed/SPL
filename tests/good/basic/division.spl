@@ -1,0 +1,16 @@
+int f(int n)
+{
+    return n / 3;
+}
+
+int g(int n)
+{
+    return n % 3;
+}
+
+int main()
+{
+    printInt(f(10));
+    printInt(g(10));
+    return 0;
+}

@@ -22,6 +22,17 @@ modifyValue f ir =
       IR_Phi x vs -> IR_Phi x (Prelude.map (\(n,v) -> (n, f v)) vs)
       ir' -> ir'
 
+modifyVar :: (SVar -> SVar) -> IR -> IR
+modifyVar f ir =
+    case ir of
+      IR_Ass x v -> IR_Ass (f x) v
+      IR_BinOp op x v1 v2 -> IR_BinOp op (f x) v1 v2
+      IR_UnOp op x v -> IR_UnOp op (f x) v
+      IR_MemRead x v -> IR_MemRead (f x) v
+      IR_Call x v vs -> IR_Call (f x) v vs
+      IR_Phi x vs -> IR_Phi (f x) vs
+      ir' -> ir'
+
 takeVar :: IR -> Maybe SVar
 takeVar (IR_Ass x _) = Just x
 takeVar (IR_BinOp _ x _ _) = Just x

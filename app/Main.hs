@@ -21,6 +21,7 @@ import ArgParse
 import CalculateLiveVars
 import CodeM
 import Defs ( Pos )
+import FinishOptimizations
 import GenerateIR ( runGenerateIR )
 import GenCode ( genCode )
 import GraphColoring ( colorBBGraph )
@@ -103,7 +104,7 @@ optimizeCode p = do
     let p' = M.mapWithKey splitIntoBasicBlocks p
     p <- mapM toSSA p'
     p <- return (optimize p)
-    p <- return (M.map removePhi p)
+    p <- return (M.map finishOptimizations p)
     return p
 
 run :: ParseFun (Program a) -> Bool -> Bool -> String -> IO ()
