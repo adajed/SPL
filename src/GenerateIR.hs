@@ -283,6 +283,16 @@ acquireObject t x = do
     emitIR (IR_MemSave x newcnt 4)
     emitIR (IR_Label l)
 
+decrementRefCount :: T -> ValIR -> GenerateIR ()
+decrementRefCount (Int ()) _ = return ()
+decrementRefCount (Bool ()) _ = return ()
+decrementRefCount (Null ()) _ = return ()
+decrementRefCount t x = do
+    l <- getFreshLabel
+    emitIR (IR_CondJump x IR.EQU (IntIR 0 8) l)
+    decreaseRefCount x
+    emitIR (IR_Label l)
+
 
 generateIR_Destructor :: CIdent -> GenerateIR ()
 generateIR_Destructor cls = do
@@ -298,13 +308,16 @@ generateIR_Destructor cls = do
     emitIR (IR_CondJump x IR.NEQ (IntIR 0 8) l)
     emitIR IR_VoidReturn
     emitIR (IR_Label l)
-    cnt <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_MemRead t x)
-    newcnt <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp ISub t cnt (IntIR 1 4))
-    emitIR (IR_MemSave x newcnt 4)
-    l <- getFreshLabel
-    emitIR (IR_CondJump newcnt IR.EQU (IntIR 0 4) l)
-    emitIR IR_VoidReturn
-    emitIR (IR_Label l)
+    when (not ((L.isPrefixOf "env__class__") (show cls)))
+        (do
+         cnt <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_MemRead t x)
+         newcnt <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp ISub t cnt (IntIR 1 4))
+         emitIR (IR_MemSave x newcnt 4)
+         l <- getFreshLabel
+         emitIR (IR_CondJump newcnt IR.EQU (IntIR 0 4) l)
+         emitIR IR_VoidReturn
+         emitIR (IR_Label l)
+        )
     info <- liftM (M.! cls) $ gets classInfo
     mapM_ (freeField info x) (M.keys (fieldSize info))
     let free = LabelIR (VIdent "freeMemory")
@@ -361,11 +374,11 @@ generateIR_Stmt (BStmt _ (Bl _ stmts)) = do
 generateIR_Stmt (Decl _ t items) = do
     mapM_ (generateIR_Decl (fmap (const ()) t)) items
 generateIR_Stmt (Ass t expr1 expr2) = do
+    value <- generateIR_Expr expr2
+    acquireObject (exprType expr2) value
     releaseObject (exprType expr1) =<< generateIR_Expr expr1
     fAss <- generateIR_LExpr expr1
-    value <- generateIR_Expr expr2
     fAss value
-    acquireObject (exprType expr2) value
 generateIR_Stmt (Incr _ expr) = do
     value <- generateIR_Expr expr
     f <- generateIR_LExpr expr
@@ -380,6 +393,7 @@ generateIR_Stmt (Ret _ expr) = do
     value <- generateIR_Expr expr
     acquireObject (exprType expr) value
     releaseWholeStack
+    decrementRefCount (exprType expr) value
     emitIR (IR_Return value)
 generateIR_Stmt (VRet _) = do
     releaseWholeStack
@@ -467,9 +481,9 @@ generateIR_Expr expr@(EArrAcc type_ arr index) = do
     loc <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t arrV' v')
     liftM VarIR $ emitIR_ToTemp size (\t -> IR_MemRead t loc)
 generateIR_Expr (EApp ty fExpr args) = do
-    f <- generateIR_AppExpr fExpr ty
     xs <- mapM generateIR_Expr args
     mapM_ (uncurry acquireObject) (zip (map exprType args) xs)
+    f <- generateIR_AppExpr fExpr ty
     f xs
 generateIR_Expr (EUnaryOp _ op expr) = generateIR_UnOp op' expr
     where op' = case op of
@@ -497,14 +511,30 @@ generateIR_Expr (EObjNew t cls) =
     let f = LabelIR (constructorName cls)
      in liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_Call t f [])
 generateIR_Expr (EArrNew tt t expr) = do
-    let n = fromIntegral (sizeOf t)
-    let size = EAdd (Int ()) (EMul (Int ()) expr (Times tt) (EInt (Int ()) n)) (Plus tt) (EInt (Int ()) 8)
-    v <- generateIR_Expr_Alloc size
-    t <- generateIR_Expr expr
-    v' <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 4 8))
-    emitIR (IR_MemSave v' t 4)
-    emitIR (IR_MemSave v (IntIR 0 4) 4)
-    return v
+    let n = sizeOf t
+    v1 <- generateIR_Expr expr
+    v2 <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp IMul t v1 (IntIR n 4))
+    v3 <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp IAdd t v2 (IntIR 8 4))
+    let f = LabelIR (VIdent "allocMemory")
+    ptr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_Call t f [v3])
+    emitIR (IR_MemSave ptr (IntIR 0 4) 4)
+    t1 <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t ptr (IntIR 4 8))
+    emitIR (IR_MemSave t1 v1 4)
+    let initVal = defaultValue t
+    i <- emitIR_ToTemp 4 (\t -> IR_Ass t (IntIR 0 4))
+    p' <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t ptr (IntIR 8 8))
+    lLoop <- getFreshLabel
+    lEnd <- getFreshLabel
+    emitIR (IR_Jump lEnd)
+    emitIR (IR_Label lLoop)
+    p1 <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp IMul t (VarIR i) (IntIR n 4))
+    p2 <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t p' p1)
+    emitIR (IR_MemSave p2 initVal n)
+    i' <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp IAdd t (VarIR i) (IntIR 1 4))
+    emitIR (IR_Ass i i')
+    emitIR (IR_Label lEnd)
+    emitIR (IR_CondJump (VarIR i) IR.LTH v1 lLoop)
+    return ptr
 generateIR_Expr e@(ELambda ty args stmt) = do
     let freeVars = S.toList (getFreeVars (Ret (Void ()) e))
     let initInfo = ClassInfo { classSize = 4, fieldSize = M.empty, fieldOffset = M.empty, fieldType = M.empty }

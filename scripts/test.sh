@@ -1,6 +1,7 @@
 #!/bin/bash
 
 PROGRAM="./spl"
+VALGRIND="valgrind --error-exitcode=1 --leak-check=full"
 
 test_output=0
 
@@ -18,14 +19,22 @@ single_test()
         test_output=0
     else
         if [ ! -f ${_exec}.in ]; then
-            out=$(${_exec})
+            run="${_exec}"
         else
-            out=$(${_exec} < ${_exec}.in)
+            run="${_exec} < ${_exec}.in"
         fi
+        out=$(${run})
         true_out=$(cat ${_exec}.out)
         if [ "$out" == "$true_out" ]; then
-            echo -e "\e[32mTest passed\e[39m"
-            test_output=1
+             ${VALGRIND} ${run} 2>/dev/null 1>/dev/null
+            _retcode=$?
+            if [ ${_retcode} != 0 ]; then
+                echo -e "\e[31mTest failed (memory leak)\e[39m"
+                test_output=0
+            else
+                echo -e "\e[32mTest passed\e[39m"
+                test_output=1
+            fi
         else
             echo -e "\e[31mTest failed\e[39m"
             echo "Output:"
