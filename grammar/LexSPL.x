@@ -40,6 +40,8 @@ $d+      { tok (\p s -> PT p (TI $ share s))    }
 
 {
 
+type Pos = Maybe (Int, Int)
+
 tok :: (Posn -> String -> Token) -> (Posn -> String -> Token)
 tok f p s = f p s
 

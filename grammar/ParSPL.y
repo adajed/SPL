@@ -61,126 +61,369 @@ import ErrM
   '}' { PT _ (TS _ 46) }
   '~' { PT _ (TS _ 47) }
 
-L_integ  { PT _ (TI $$) }
-L_CIdent { PT _ (T_CIdent $$) }
-L_VIdent { PT _ (T_VIdent $$) }
+L_integ  { PT _ (TI _) }
+L_CIdent { PT _ (T_CIdent _) }
+L_VIdent { PT _ (T_VIdent _) }
 
 
 %%
 
-Integer :: { Integer } : L_integ  { (read ( $1)) :: Integer }
-CIdent    :: { CIdent} : L_CIdent { CIdent ($1)}
-VIdent    :: { VIdent} : L_VIdent { VIdent ($1)}
+Integer :: { (Pos, Integer) }
+: L_integ {
+    (Just (tokenLineCol $1), read (prToken $1))
+}
 
-Program :: { (Program ()) }
-Program : ListTopDef { AbsSPL.Prog () $1 }
-TopDef :: { (TopDef ()) }
-TopDef : Type VIdent '(' ListArgument ')' Block { AbsSPL.FnDef () $1 $2 $4 $6 }
-       | 'class' CIdent '{' ListClassArgument '}' { AbsSPL.ClDef () $2 (reverse $4) }
-ListTopDef :: { [TopDef ()] }
-ListTopDef : TopDef { (:[]) $1 } | TopDef ListTopDef { (:) $1 $2 }
-Argument :: { (Argument ()) }
-Argument : Type VIdent { AbsSPL.Arg () $1 $2 }
-ListArgument :: { [Argument ()] }
-ListArgument : {- empty -} { [] }
-             | Argument { (:[]) $1 }
-             | Argument ',' ListArgument { (:) $1 $3 }
-ClassArgument :: { (ClassArgument ()) }
-ClassArgument : Type ListVIdent ';' { AbsSPL.Field () $1 $2 }
-ListVIdent :: { [VIdent] }
-ListVIdent : VIdent { (:[]) $1 }
-           | VIdent ',' ListVIdent { (:) $1 $3 }
-ListClassArgument :: { [ClassArgument ()] }
-ListClassArgument : {- empty -} { [] }
-                  | ListClassArgument ClassArgument { flip (:) $1 $2 }
-Block :: { (Block ()) }
-Block : '{' ListStmt '}' { AbsSPL.Bl () (reverse $2) }
-ListStmt :: { [Stmt ()] }
-ListStmt : {- empty -} { [] } | ListStmt Stmt { flip (:) $1 $2 }
-Stmt :: { (Stmt ()) }
-Stmt : ';' { AbsSPL.Empty () }
-     | Block { AbsSPL.BStmt () $1 }
-     | Type ListItem ';' { AbsSPL.Decl () $1 $2 }
-     | Expr '=' Expr ';' { AbsSPL.Ass () $1 $3 }
-     | Expr '++' ';' { AbsSPL.Incr () $1 }
-     | Expr '--' ';' { AbsSPL.Decr () $1 }
-     | 'return' Expr ';' { AbsSPL.Ret () $2 }
-     | 'return' ';' { AbsSPL.VRet () }
-     | 'if' '(' Expr ')' Stmt { AbsSPL.Cond () $3 $5 }
-     | 'if' '(' Expr ')' Stmt 'else' Stmt { AbsSPL.CondElse () $3 $5 $7 }
-     | 'while' '(' Expr ')' Stmt { AbsSPL.While () $3 $5 }
-     | Expr ';' { AbsSPL.SExp () $1 }
-Item :: { (Item ()) }
-Item : VIdent { AbsSPL.NoInit () $1 }
-     | VIdent '=' Expr { AbsSPL.Init () $1 $3 }
-ListItem :: { [Item ()] }
-ListItem : Item { (:[]) $1 } | Item ',' ListItem { (:) $1 $3 }
-Type :: { (Type ()) }
-Type : 'int' { AbsSPL.Int () }
-     | 'bool' { AbsSPL.Bool () }
-     | 'void' { AbsSPL.Void () }
-     | CIdent { AbsSPL.Class () $1 }
-     | Type '[]' { AbsSPL.Array () $1 }
-     | Type '(' ListType ')' { AbsSPL.Fun () $1 $3 }
-ListType :: { [Type ()] }
-ListType : {- empty -} { [] }
-         | Type { (:[]) $1 }
-         | Type ',' ListType { (:) $1 $3 }
-Expr6 :: { Expr () }
-Expr6 : 'null' { AbsSPL.ENull () }
-      | Integer { AbsSPL.EInt () $1 }
-      | 'true' { AbsSPL.ETrue () }
-      | 'false' { AbsSPL.EFalse () }
-      | VIdent { AbsSPL.EVar () $1 }
-      | Expr6 '.' VIdent { AbsSPL.EField () $1 $3 }
-      | Expr6 '[' Expr ']' { AbsSPL.EArrAcc () $1 $3 }
-      | Expr6 '(' ListExpr ')' { AbsSPL.EApp () $1 $3 }
-      | '(' Expr ')' { $2 }
-Expr5 :: { Expr () }
-Expr5 : UnaryOp Expr5 { AbsSPL.EUnaryOp () $1 $2 } | Expr6 { $1 }
-Expr4 :: { Expr () }
-Expr4 : Expr4 MulOp Expr5 { AbsSPL.EMul () $1 $2 $3 }
-      | Expr5 { $1 }
-Expr3 :: { Expr () }
-Expr3 : Expr3 AddOp Expr4 { AbsSPL.EAdd () $1 $2 $3 }
-      | Expr4 { $1 }
-Expr2 :: { Expr () }
-Expr2 : Expr2 RelOp Expr3 { AbsSPL.ERel () $1 $2 $3 }
-      | Expr3 { $1 }
-Expr1 :: { Expr () }
-Expr1 : Expr2 '&&' Expr1 { AbsSPL.EAnd () $1 $3 } | Expr2 { $1 }
-Expr :: { (Expr ()) }
-Expr : Expr1 '||' Expr { AbsSPL.EOr () $1 $3 }
-     | 'new' CIdent { AbsSPL.EObjNew () $2 }
-     | 'new' Type '[' Expr ']' { AbsSPL.EArrNew () $2 $4 }
-     | '\\' ListArgument '->' Stmt { AbsSPL.ELambda () $2 $4 }
-     | Expr1 { $1 }
-ListExpr :: { [Expr ()] }
-ListExpr : {- empty -} { [] }
-         | Expr { (:[]) $1 }
-         | Expr ',' ListExpr { (:) $1 $3 }
-UnaryOp :: { (UnaryOp ()) }
-UnaryOp : '-' { AbsSPL.Neg () }
-        | '!' { AbsSPL.Not () }
-        | '~' { AbsSPL.BitNot () }
-AddOp :: { (AddOp ()) }
-AddOp : '+' { AbsSPL.Plus () } | '-' { AbsSPL.Minus () }
-MulOp :: { (MulOp ()) }
-MulOp : '*' { AbsSPL.Times () }
-      | '/' { AbsSPL.Div () }
-      | '%' { AbsSPL.Mod () }
-      | '<<' { AbsSPL.LShift () }
-      | '>>' { AbsSPL.RShift () }
-      | '&' { AbsSPL.BitAnd () }
-      | '|' { AbsSPL.BitOr () }
-      | '^' { AbsSPL.BitXor () }
-RelOp :: { (RelOp ()) }
-RelOp : '<' { AbsSPL.LTH () }
-      | '<=' { AbsSPL.LE () }
-      | '>' { AbsSPL.GTH () }
-      | '>=' { AbsSPL.GE () }
-      | '==' { AbsSPL.EQU () }
-      | '!=' { AbsSPL.NE () }
+CIdent  :: { (Pos, CIdent) }
+: L_CIdent {
+    (Just (tokenLineCol $1), CIdent (prToken $1))
+}
+VIdent  :: { (Pos, VIdent) }
+: L_VIdent {
+    (Just (tokenLineCol $1), VIdent (prToken $1))
+}
+
+Program :: { (Pos, Program Pos) }
+Program : ListTopDef { (fst $1, AbsSPL.Prog (fst $1) (snd $1)) }
+
+TopDef :: { (Pos, TopDef Pos) }
+TopDef
+: Type VIdent '(' ListArgument ')' Block {
+    (fst $1, AbsSPL.FnDef (fst $1) (snd $1) (snd $2) (snd $4) (snd $6))
+}
+| 'class' CIdent '{' ListClassArgument '}' {
+    (Just (tokenLineCol $1), AbsSPL.ClDef (Just (tokenLineCol $1)) (snd $2) (reverse (snd $4)))
+}
+
+ListTopDef :: { (Pos, [TopDef Pos]) }
+ListTopDef
+: TopDef {
+    (fst $1, (:[]) (snd $1))
+}
+| TopDef ListTopDef {
+    (fst $1, ((:) (snd $1) (snd $2)))
+}
+
+Argument :: { (Pos, Argument Pos) }
+Argument
+: Type VIdent {
+    (fst $1, AbsSPL.Arg (fst $1) (snd $1) (snd $2))
+}
+
+ListArgument :: { (Pos, [Argument Pos]) }
+ListArgument
+: {- empty -} {
+    (Nothing, [])
+}
+| Argument {
+    (fst $1, [snd $1])
+}
+| Argument ',' ListArgument {
+    (fst $1, (snd $1):(snd $3))
+}
+
+ClassArgument :: { (Pos, ClassArgument Pos) }
+ClassArgument
+: Type ListVIdent ';' {
+    (fst $1, AbsSPL.Field (fst $1) (snd $1) (snd $2))
+}
+
+ListVIdent :: { (Pos, [VIdent]) }
+ListVIdent
+: VIdent {
+    (fst $1, [snd $1])
+}
+| VIdent ',' ListVIdent {
+    (fst $1, (snd $1):(snd $3))
+}
+
+ListClassArgument :: { (Pos, [ClassArgument Pos]) }
+ListClassArgument
+: {- empty -} {
+    (Nothing, [])
+}
+| ListClassArgument ClassArgument {
+    (fst $1, (snd $2):(snd $1))
+}
+
+Block :: { (Pos, Block Pos) }
+Block
+: '{' ListStmt '}' {
+    (Just (tokenLineCol $1), AbsSPL.Bl (Just (tokenLineCol $1)) (reverse (snd $2)))
+}
+
+ListStmt :: { (Pos, [Stmt Pos]) }
+ListStmt
+: {- empty -} {
+    (Nothing, [])
+}
+| ListStmt Stmt {
+    (fst $1, (snd $2):(snd $1))
+}
+
+Stmt :: { (Pos, Stmt Pos) }
+Stmt
+: ';' {
+    (Just (tokenLineCol $1), AbsSPL.Empty (Just (tokenLineCol $1)))
+}
+| Block {
+    (fst $1, AbsSPL.BStmt (fst $1) (snd $1))
+}
+| Type ListItem ';' {
+    (fst $1, AbsSPL.Decl (fst $1) (snd $1) (snd $2))
+}
+| Expr '=' Expr ';' {
+    (fst $1, AbsSPL.Ass (fst $1) (snd $1) (snd $3))
+}
+| Expr '++' ';' {
+    (fst $1, AbsSPL.Incr (fst $1) (snd $1))
+}
+| Expr '--' ';' {
+    (fst $1, AbsSPL.Decr (fst $1) (snd $1))
+}
+| 'return' Expr ';' {
+    (Just (tokenLineCol $1), AbsSPL.Ret (Just (tokenLineCol $1)) (snd $2))
+}
+| 'return' ';' {
+    (Just (tokenLineCol $1), AbsSPL.VRet (Just (tokenLineCol $1)))
+}
+| 'if' '(' Expr ')' Stmt {
+    (Just (tokenLineCol $1), AbsSPL.Cond (Just (tokenLineCol $1)) (snd $3) (snd $5))
+}
+| 'if' '(' Expr ')' Stmt 'else' Stmt {
+    (Just (tokenLineCol $1), AbsSPL.CondElse (Just (tokenLineCol $1)) (snd $3) (snd $5) (snd $7))
+}
+| 'while' '(' Expr ')' Stmt {
+    (Just (tokenLineCol $1), AbsSPL.While (Just (tokenLineCol $1)) (snd $3) (snd $5))
+}
+| Expr ';' {
+    (fst $1, AbsSPL.SExp (fst $1) (snd $1))
+}
+
+Item :: { (Pos, Item Pos) }
+Item
+: VIdent {
+    (fst $1, AbsSPL.NoInit (fst $1) (snd $1))
+}
+| VIdent '=' Expr {
+    (fst $1, AbsSPL.Init (fst $1) (snd $1) (snd $3))
+}
+
+ListItem :: { (Pos, [Item Pos]) }
+ListItem
+: Item {
+    (fst $1, [snd $1])
+}
+| Item ',' ListItem {
+    (fst $1, (snd $1):(snd $3))
+}
+
+Type :: { (Pos, Type Pos) }
+Type
+: 'int' {
+    (Just (tokenLineCol $1), AbsSPL.Int (Just (tokenLineCol $1)))
+}
+| 'bool' {
+    (Just (tokenLineCol $1), AbsSPL.Bool (Just (tokenLineCol $1)))
+}
+| 'void' {
+    (Just (tokenLineCol $1), AbsSPL.Void (Just (tokenLineCol $1)))
+}
+| CIdent {
+    (fst $1, AbsSPL.Class (fst $1) (snd $1))
+}
+| Type '[]' {
+    (fst $1, AbsSPL.Array (fst $1) (snd $1))
+}
+| Type '(' ListType ')' {
+    (fst $1, AbsSPL.Fun (fst $1) (snd $1) (snd $3))
+}
+
+ListType :: { (Pos, [Type Pos]) }
+ListType
+: {- empty -} {
+    (Nothing, [])
+}
+| Type {
+    (fst $1, [snd $1])
+}
+| Type ',' ListType {
+    (fst $1, (snd $1):(snd $3))
+}
+
+Expr6 :: { (Pos, Expr Pos) }
+Expr6
+: 'null' {
+    (Just (tokenLineCol $1), AbsSPL.ENull (Just (tokenLineCol $1)))
+}
+| Integer {
+    (fst $1, AbsSPL.EInt (fst $1) (snd $1))
+}
+| 'true' {
+    (Just (tokenLineCol $1), AbsSPL.ETrue (Just (tokenLineCol $1)))
+}
+| 'false' {
+    (Just (tokenLineCol $1), AbsSPL.EFalse (Just (tokenLineCol $1)))
+}
+| VIdent {
+    (fst $1, AbsSPL.EVar (fst $1) (snd $1))
+}
+| Expr6 '.' VIdent {
+    (fst $1, AbsSPL.EField (fst $1) (snd $1) (snd $3))
+}
+| Expr6 '[' Expr ']' {
+    (fst $1, AbsSPL.EArrAcc (fst $1) (snd $1) (snd $3))
+}
+| Expr6 '(' ListExpr ')' {
+    (fst $1, AbsSPL.EApp (fst $1) (snd $1) (snd $3))
+}
+| '(' Expr ')' {
+    (Just (tokenLineCol $1), (snd $2))
+}
+
+Expr5 :: { (Pos, Expr Pos) }
+Expr5
+: UnaryOp Expr5 {
+    (fst $1, AbsSPL.EUnaryOp (fst $1) (snd $1) (snd $2))
+}
+| Expr6 {
+    $1
+}
+
+Expr4 :: { (Pos, Expr Pos) }
+Expr4
+: Expr4 MulOp Expr5 {
+    (fst $1, AbsSPL.EMul (fst $1) (snd $1) (snd $2) (snd $3))
+}
+| Expr5 {
+    $1
+}
+
+Expr3 :: { (Pos, Expr Pos) }
+Expr3
+: Expr3 AddOp Expr4 {
+    (fst $1, AbsSPL.EAdd (fst $1) (snd $1) (snd $2) (snd $3))
+}
+| Expr4 {
+    $1
+}
+
+Expr2 :: { (Pos, Expr Pos) }
+Expr2
+: Expr2 RelOp Expr3 {
+    (fst $1, AbsSPL.ERel (fst $1) (snd $1) (snd $2) (snd $3))
+}
+| Expr3 {
+    $1
+}
+
+Expr1 :: { (Pos, Expr Pos) }
+Expr1
+: Expr2 '&&' Expr1 {
+    (fst $1, AbsSPL.EAnd (fst $1) (snd $1) (snd $3))
+}
+| Expr2 {
+    $1
+}
+
+Expr :: { (Pos, Expr Pos) }
+Expr
+: Expr1 '||' Expr {
+    (fst $1, AbsSPL.EOr (fst $1) (snd $1) (snd $3))
+}
+| 'new' CIdent {
+    (Just (tokenLineCol $1), AbsSPL.EObjNew (Just (tokenLineCol $1)) (snd $2))
+}
+| 'new' Type '[' Expr ']' {
+    (Just (tokenLineCol $1), AbsSPL.EArrNew (Just (tokenLineCol $1)) (snd $2) (snd $4))
+}
+| '\\' ListArgument '->' Stmt {
+    (Just (tokenLineCol $1), AbsSPL.ELambda (Just (tokenLineCol $1)) (snd $2) (snd $4))
+}
+| Expr1 {
+    $1
+}
+
+ListExpr :: { (Pos, [Expr Pos]) }
+ListExpr
+: {- empty -} {
+    (Nothing, [])
+}
+| Expr {
+    (fst $1, [snd $1])
+}
+| Expr ',' ListExpr {
+    (fst $1, (snd $1):(snd $3))
+}
+
+UnaryOp :: { (Pos, UnaryOp Pos) }
+UnaryOp
+: '-' {
+    (Just (tokenLineCol $1), AbsSPL.Neg (Just (tokenLineCol $1)))
+}
+| '!' {
+    (Just (tokenLineCol $1), AbsSPL.Not (Just (tokenLineCol $1)))
+}
+| '~' {
+    (Just (tokenLineCol $1), AbsSPL.BitNot (Just (tokenLineCol $1)))
+}
+
+AddOp :: { (Pos, AddOp Pos) }
+AddOp
+: '+' {
+    (Just (tokenLineCol $1), AbsSPL.Plus (Just (tokenLineCol $1)))
+}
+| '-' {
+    (Just (tokenLineCol $1), AbsSPL.Minus (Just (tokenLineCol $1)))
+}
+
+MulOp :: { (Pos, MulOp Pos) }
+MulOp
+: '*' {
+    (Just (tokenLineCol $1), AbsSPL.Times (Just (tokenLineCol $1)))
+}
+| '/' {
+    (Just (tokenLineCol $1), AbsSPL.Div (Just (tokenLineCol $1)))
+}
+| '%' {
+    (Just (tokenLineCol $1), AbsSPL.Mod (Just (tokenLineCol $1)))
+}
+| '<<' {
+    (Just (tokenLineCol $1), AbsSPL.LShift (Just (tokenLineCol $1)))
+}
+| '>>' {
+    (Just (tokenLineCol $1), AbsSPL.RShift (Just (tokenLineCol $1)))
+}
+| '&' {
+    (Just (tokenLineCol $1), AbsSPL.BitAnd (Just (tokenLineCol $1)))
+}
+| '|' {
+    (Just (tokenLineCol $1), AbsSPL.BitOr (Just (tokenLineCol $1)))
+}
+| '^' {
+    (Just (tokenLineCol $1), AbsSPL.BitXor (Just (tokenLineCol $1)))
+}
+
+RelOp :: { (Pos, RelOp Pos) }
+RelOp
+: '<' {
+    (Just (tokenLineCol $1), AbsSPL.LTH (Just (tokenLineCol $1)))
+}
+| '<=' {
+    (Just (tokenLineCol $1), AbsSPL.LE (Just (tokenLineCol $1)))
+}
+| '>' {
+    (Just (tokenLineCol $1), AbsSPL.GTH (Just (tokenLineCol $1)))
+}
+| '>=' {
+    (Just (tokenLineCol $1), AbsSPL.GE (Just (tokenLineCol $1)))
+}
+| '==' {
+    (Just (tokenLineCol $1), AbsSPL.EQU (Just (tokenLineCol $1)))
+}
+| '!=' {
+    (Just (tokenLineCol $1), AbsSPL.NE (Just (tokenLineCol $1)))
+}
+
 {
 
 returnM :: a -> Err a
@@ -195,8 +438,12 @@ happyError ts =
   case ts of
     [] -> []
     [Err _] -> " due to lexer error"
-    _ -> " before " ++ unwords (map (id . prToken) (take 4 ts))
+    t:_ -> " before '" ++ id(prToken t) ++ "'"
 
 myLexer = tokens
+
+parseProgram :: [Token] -> Err (Program Pos)
+parseProgram = (>>= return . snd) . pProgram
+
 }
 

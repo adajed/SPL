@@ -101,8 +101,10 @@ alex_actions = array (0 :: Int, 14)
   , (0,alex_action_7)
   ]
 
-{-# LINE 41 "grammar/LexSPL.x" #-}
+{-# LINE 42 "grammar/LexSPL.x" #-}
 
+
+type Pos = Maybe (Int, Int)
 
 tok :: (Posn -> String -> Token) -> (Posn -> String -> Token)
 tok f p s = f p s

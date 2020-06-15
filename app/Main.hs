@@ -148,4 +148,4 @@ main = do
         let aShowTree = ArgParse.showTree a
         let bSaveIR = saveIR a
         let aFilePaths = filepaths a
-        mapM_ (run pProgram aShowTree bSaveIR) aFilePaths
+        mapM_ (run parseProgram aShowTree bSaveIR) aFilePaths
