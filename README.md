@@ -5,7 +5,6 @@ Compiler generates code for Linux x86_64.
 ## Compilation
 
 ### Prerequisites (with tested versions)
-- bnfc 2.8 (https://bnfc.digitalgrammars.com/)
 - happy 1.19.8
 - alex 3.2.3
 - make 4.1
