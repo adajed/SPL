@@ -20,7 +20,6 @@ import AbsSPL
 import ArgParse
 import CalculateLiveVars
 import CodeM
-import Defs ( Pos )
 import FinishOptimizations
 import GenerateIR ( runGenerateIR )
 import GenCode ( genCode )
@@ -32,10 +31,13 @@ import Optimizations
 import StaticCheck
 import SSA
 
-type ParseFun a = [Token] -> Err a
+type Parser = [Token] -> Err (Program Pos)
 
-myLLexer :: String -> [Token]
-myLLexer = myLexer
+parser :: Parser
+parser = parseProgram
+
+lexer :: String -> [Token]
+lexer = myLexer
 
 removeExtension :: FilePath -> FilePath
 removeExtension filepath =
@@ -92,10 +94,10 @@ writeCode h (fName, xs) = do
     mapM_ f xs
     hPutStrLn h ""
 
-compileProgram :: ParseFun (Program a) -> String -> Err (Program (), M.Map VIdent BBGraph,  M.Map VIdent [Code])
-compileProgram parser fileContent = do
-    let abstractTree = myLLexer fileContent
-    program <- liftM (fmap (const ())) $ parser abstractTree
+compileProgram :: String -> Err (Program (), M.Map VIdent BBGraph,  M.Map VIdent [Code])
+compileProgram fileContent = do
+    let abstractTree = lexer fileContent
+    program <- parser abstractTree
     program' <- staticCheck program
     code <- runGenerateIR program'
     ir <- optimizeCode code
@@ -111,12 +113,11 @@ optimizeCode p = do
     p <- return (M.map finishOptimizations p)
     return p
 
-run :: ParseFun (Program a) -> Bool -> Bool -> String -> IO ()
-run parser bShowTree bSaveIR filepath = do
+run :: Bool -> Bool -> String -> IO ()
+run bShowTree bSaveIR filepath = do
     hPutStrLn stderr ("Compiling " ++ filepath)
     fileContent <- readFile filepath
-    let abstractTree = myLLexer fileContent
-    case compileProgram parser fileContent of
+    case compileProgram fileContent of
       Bad errorMsg -> do
           hPutStrLn stderr errorMsg
           exitFailure
@@ -148,4 +149,4 @@ main = do
         let aShowTree = ArgParse.showTree a
         let bSaveIR = saveIR a
         let aFilePaths = filepaths a
-        mapM_ (run parseProgram aShowTree bSaveIR) aFilePaths
+        mapM_ (run aShowTree bSaveIR) aFilePaths

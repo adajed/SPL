@@ -7,9 +7,9 @@ import Control.Monad.Trans.Reader
 import qualified Data.Map as M
 
 import AbsSPL
+import LexSPL
 import ErrM
 
-type FData = ()
 type TType = Type ()
 type Level = Int
 
@@ -36,6 +36,13 @@ arrayT = Array ()
 funT :: TType -> [TType] -> TType
 funT = Fun ()
 
+toUnit :: Functor f => f a -> f ()
+toUnit = fmap (const ())
+
+toVoid :: Functor f => f a -> f TType
+toVoid = fmap (const voidT)
+
+
 data SState = SState { rettype :: TType
                      , varEnv  :: VarEnv
                      , classEnv  :: ClassEnv
@@ -56,7 +63,7 @@ runCheckM m = evalStateT m initialSState
                                  , classEnv = M.empty
                                  , level = 0}
 
-assertVariableNotDeclared :: FData -> VIdent -> CheckM ()
+assertVariableNotDeclared :: Pos -> VIdent -> CheckM ()
 assertVariableNotDeclared pos name = do
     info <- liftM (M.!? name) $ gets varEnv
     l <- getCurrentLevel
@@ -64,34 +71,34 @@ assertVariableNotDeclared pos name = do
       Just i -> when (l == varLevel i) (errorMsg pos ("Variable " ++ show name ++ " already declared"))
       Nothing -> return ()
 
-assertClassNotDeclared :: FData -> CIdent -> CheckM ()
+assertClassNotDeclared :: Pos -> CIdent -> CheckM ()
 assertClassNotDeclared pos name = do
     info <- liftM (M.!? name) $ gets classEnv
     case info of
       Just _ -> errorMsg pos ("Class " ++ show name ++ " already declared")
       Nothing -> return ()
 
-assertClassDeclared :: CIdent -> CheckM ()
-assertClassDeclared name = do
+assertClassDeclared :: Pos -> CIdent -> CheckM ()
+assertClassDeclared pos name = do
     info <- liftM (M.!? name) $ gets classEnv
-    when (info == Nothing) (errorMsg () ("Class " ++ show name ++ " not declared"))
+    when (info == Nothing) (errorMsg pos ("Class " ++ show name ++ " not declared"))
 
-getVariableInfo :: FData -> VIdent -> CheckM VarInfo
+getVariableInfo :: Pos -> VIdent -> CheckM VarInfo
 getVariableInfo pos name = do
     info <- liftM (M.!? name) $ gets varEnv
     case info of
       Just i -> return i
       Nothing -> errorMsg pos ("Variable " ++ show name ++ " not declared")
 
-getVariableType :: FData -> VIdent -> CheckM TType
+getVariableType :: Pos -> VIdent -> CheckM TType
 getVariableType pos name = liftM varType $ getVariableInfo pos name
 
-getVariableLevel :: FData -> VIdent -> CheckM Level
+getVariableLevel :: Pos -> VIdent -> CheckM Level
 getVariableLevel pos name = liftM varLevel $ getVariableInfo pos name
 
-getClassInfo :: CIdent -> CheckM ClassInfo
-getClassInfo name = do
-    assertClassDeclared name
+getClassInfo :: Pos -> CIdent -> CheckM ClassInfo
+getClassInfo pos name = do
+    assertClassDeclared pos name
     liftM (M.! name) $ gets classEnv
 
 getReturnType :: CheckM TType
@@ -100,30 +107,30 @@ getReturnType = gets rettype
 getCurrentLevel :: CheckM Level
 getCurrentLevel = gets level
 
-declareVar :: FData -> VIdent -> TType -> CheckM ()
+declareVar :: Pos -> VIdent -> TType -> CheckM ()
 declareVar pos name t = do
     assertVariableNotDeclared pos name
     l <- getCurrentLevel
     let info = VarInfo { varLevel = l, varType = t }
     modify (\s -> s { varEnv = M.insert name info (varEnv s) })
 
-declareClass :: FData -> CIdent -> ClassInfo -> CheckM ()
+declareClass :: Pos -> CIdent -> ClassInfo -> CheckM ()
 declareClass pos name info = do
     assertClassNotDeclared pos name
     modify (\s -> s { classEnv = M.insert name info (classEnv s) })
 
-getArgType :: Argument FData -> TType
-getArgType (Arg _ t _) = t
+getArgType :: Argument Pos -> TType
+getArgType (Arg _ t _) = toUnit t
 
-declareArg :: Argument FData -> CheckM ()
-declareArg (Arg pos t name) = declareVar pos name t
+declareArg :: Argument Pos -> CheckM ()
+declareArg (Arg pos t name) = declareVar pos name (toUnit t)
 
-declareTopDef :: TopDef FData -> CheckM ()
+declareTopDef :: TopDef Pos -> CheckM ()
 declareTopDef (FnDef pos t name args _) =
-    declareVar pos name (funT t (map getArgType args))
+    declareVar pos name (funT (toUnit t) (map getArgType args))
 declareTopDef (ClDef pos cls args) = do
     let addField t m x = M.insert x t m
-    let addArg m (Field _ t xs) = foldl (addField t) m xs
+    let addArg m (Field _ t xs) = foldl (addField (toUnit t)) m xs
     let fieldMap = foldl addArg M.empty args
     let info = ClassInfo { fieldTypes = fieldMap }
     declareClass pos cls info
@@ -135,7 +142,7 @@ doWithSavedEnv m = do
     modify (\s -> s { varEnv = env })
     return r
 
-errorMsg :: FData -> String -> CheckM a
-errorMsg () msg = fail msg
--- errorMsg (Just (x, y)) msg = fail msg'
---     where msg' = (show x) ++ ":" ++ (show y) ++ " " ++ msg
+errorMsg :: Pos -> String -> CheckM a
+errorMsg Nothing msg = fail msg
+errorMsg (Just (x, y)) msg = fail msg'
+    where msg' = (show x) ++ ":" ++ (show y) ++ " " ++ msg

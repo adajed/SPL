@@ -1,3 +1,6 @@
+
+SRC=$(wildcard src/*.hs) $(wildcard app/*.hs)
+
 all: lib/runtime.o spl
 
 .PHONY: clean
@@ -5,7 +8,7 @@ all: lib/runtime.o spl
 lib/runtime.o: lib/runtime.c
 	gcc -c -o lib/runtime.o lib/runtime.c
 
-spl: src/LexSPL.hs src/ParSPL.hs
+spl: $(SRC)
 	stack build
 	rm -f spl
 	ln -s ./.stack-work/dist/x86_64-linux/Cabal-2.4.0.1/build/spl/spl spl
