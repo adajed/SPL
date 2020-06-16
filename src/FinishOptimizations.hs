@@ -18,11 +18,10 @@ reorderTemps g = (mapIR f g, i)
                   _ -> remap M.! x
           (remap, i) = foldl getMapBB (M.empty, 1) (M.elems (ids g))
           getMapBB m (BB _ xs) = foldl getMapIR m xs
-          getMapIR (m, i) ir = case takeVar ir of
-                            Just x@(SVar _ s) -> if M.member x m
-                                                    then (m, i)
-                                                    else (M.insert x (SVar (VarT i) s) m, i + 1)
-                            Nothing -> (m, i)
+          getMapIR m ir = foldl mapSVar m (getAllVars ir)
+          mapSVar (m, i) x@(SVar _ s) = if M.member x m
+                                            then (m, i)
+                                            else (M.insert x (SVar (VarT i) s) m, i+1)
 
 remapValIR :: (SVar -> SVar) -> ValIR -> ValIR
 remapValIR f (VarIR x) = VarIR (f x)
@@ -47,17 +46,17 @@ fixIR (IR_BinOp IMod x v1 i@(IntIR _ s), n') =
 fixIR (ir, n') = ([ir], n')
 
 removePhi :: BBGraph -> BBGraph
-removePhi g = Prelude.foldl f g' phis
+removePhi g = foldl f g' phis
     where isPhi ir = case ir of { (IR_Phi _ _) -> True ; _ -> False }
-          getPhis (BB _ xs) = Prelude.filter isPhi xs
+          getPhis (BB _ xs) = filter isPhi xs
           phis = concat (map getPhis (M.elems (ids g)))
-          h (BB name xs) = BB name (Prelude.filter (not . isPhi) xs)
+          h (BB name xs) = BB name (filter (not . isPhi) xs)
           g' = g { ids = M.map h (ids g) }
           f g (IR_Phi x vs) = insertPhiEquivalence x vs g
           f g _ = g
 
 insertPhiEquivalence :: SVar -> [(Int, ValIR)] -> BBGraph -> BBGraph
-insertPhiEquivalence x vs g = Prelude.foldl f g vs
+insertPhiEquivalence x vs g = foldl f g vs
     where f g (i, v) = if v == VarIR x then g
                                       else insertAtTheEnd i (IR_Ass x v) g
 

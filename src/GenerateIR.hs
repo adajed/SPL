@@ -551,7 +551,7 @@ generateIR_Expr e@(ELambda ty args stmt) = do
     emitIR (IR_MemSave lPtr (LabelIR lambdaName) 8)
     v1 <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 12 8))
     v2 <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_Call t (LabelIR (constructorName envName)) [])
-    mapM_ (setupEnv (fieldOffset info) (fieldSize info) v2) freeVars
+    mapM_ (setupEnv info v2) freeVars
     emitIR (IR_MemSave v1 v2 8)
     lPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t v (IntIR 20 8))
     let destrName = destuctorName envName
@@ -563,13 +563,15 @@ generateIR_Expr e@(ELambda ty args stmt) = do
     addLambda tOut lambdaName (args ++ [envArg]) stmt'
     return v
 
-setupEnv :: M.Map VIdent Offset -> M.Map VIdent Int -> ValIR -> VIdent -> GenerateIR ()
-setupEnv mOffset mSize v x = do
-    var <- getVar x
-    let offset = mOffset M.!  x
-    let size = mSize M.!  x
+setupEnv :: ClassInfo -> ValIR -> VIdent -> GenerateIR ()
+setupEnv info v x = do
+    var <- liftM VarIR $ getVar x
+    let offset = (fieldOffset info) M.! x
+    let size = (fieldSize info) M.! x
+    let ty = (fieldType info) M.! x
     t <- liftM VarIR $ emitIR_ToTemp size (\t -> IR_BinOp IAdd t v (IntIR offset 8))
-    emitIR (IR_MemSave t (VarIR var) size)
+    acquireObject ty var
+    emitIR (IR_MemSave t var size)
 
 generateIR_Expr_Alloc :: Expr T -> GenerateIR ValIR
 generateIR_Expr_Alloc expr = do

@@ -72,6 +72,7 @@ writeIR h (fName, g) = do
     writeIR_BBGraph h g'
     hPutStrLn h "register allocations:\n"
     let showR (x, r) = hPutStrLn h (show x ++ " -> " ++ show r)
+    mapM_ showR (M.assocs regs)
     hPutStrLn h "\n\n"
 
 writeCodeMap :: Handle -> M.Map VIdent [Code] -> IO ()
@@ -109,6 +110,7 @@ optimizeCode :: M.Map VIdent [IR] -> Err (M.Map VIdent BBGraph)
 optimizeCode p = do
     let p' = M.mapWithKey splitIntoBasicBlocks p
     p <- mapM toSSA p'
+    p <- return (basicOptimize p)
     p <- return (optimize p)
     p <- return (M.map finishOptimizations p)
     return p

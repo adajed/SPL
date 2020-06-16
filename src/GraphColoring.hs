@@ -26,18 +26,21 @@ allColors :: [Maybe Int]
 allColors = map Just [1..k]
 
 colorBBGraph :: BBGraph -> (BBGraph, M.Map SVar Reg)
-colorBBGraph g =
+colorBBGraph g = colorBBGraph' g S.empty
+
+colorBBGraph' :: BBGraph -> S.Set Node -> (BBGraph, M.Map SVar Reg)
+colorBBGraph' g spilledVars =
     let liveVars = calculateLiveVars g
         allVars = getAllVarsBBGraph g
         collisionGraph = calculateCollisionGraph g liveVars
         (collisionGraph', m) = coallesceGraph g collisionGraph
         costs = calculateSpillingCosts g allVars
-        colors = color collisionGraph' costs
+        colors = color collisionGraph' costs spilledVars
         colors' = recreateColoring colors m
+        s = S.fromList (M.keys (M.filter (==Nothing) colors))
       in if isAllColored colors'
             then (g, getColoring colors' (map NVar (S.toList allVars)))
-            else let g' = spill g colors
-                  in colorBBGraph g'
+            else colorBBGraph' (spill g colors) (S.union spilledVars s)
 
 getAllVarsBBGraph :: BBGraph -> S.Set SVar
 getAllVarsBBGraph g = S.unions (map getAllVarsBB (M.elems (ids g)))
@@ -175,15 +178,15 @@ customCollisions m _ = m
 isAllColored :: M.Map Node (Maybe Int) -> Bool
 isAllColored m = M.null (M.filter (== Nothing) m)
 
-color :: CollisionGraph -> M.Map Node Int -> Coloring
-color g costs =
+color :: CollisionGraph -> M.Map Node Int -> S.Set Node -> Coloring
+color g costs spilledVars =
     if not (hasVar g)
         then initColoring
         else let v = case getNode g of
                        Just v' -> v'
-                       Nothing -> chooseValueToSpll g costs
+                       Nothing -> chooseValueToSpll g costs spilledVars
                  g' = remove v g
-                 m  = color g' costs
+                 m  = color g' costs spilledVars
                  c = getColor v g m
               in M.insert v c m
 
@@ -199,9 +202,9 @@ getAllVars g = filter isNVar (M.keys g)
           isNVar (NReg _) = False
 
 -- chooses node with highest number of neighbours
-chooseValueToSpll :: CollisionGraph -> M.Map Node Int -> Node
-chooseValueToSpll g costs = snd (foldl f (head cs) (tail cs))
-    where cs = map (\n -> (S.size (g M.! n), n)) (getAllVars g)
+chooseValueToSpll :: CollisionGraph -> M.Map Node Int -> S.Set Node -> Node
+chooseValueToSpll g costs spilledVars = snd (foldl f (head cs) (tail cs))
+    where cs = map (\n -> (S.size (g M.! n), n)) (filter (`S.notMember` spilledVars) (getAllVars g))
           f (ix, x) (iy, y) = if iy > ix then (iy, y) else (ix, x)
 
 getNode :: CollisionGraph -> Maybe Node

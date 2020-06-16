@@ -60,12 +60,10 @@ staticCheck_TopDef :: TopDef Pos -> CheckM (TopDef TType)
 staticCheck_TopDef (FnDef _ t name args (Bl _ stmts)) = doWithSavedEnv m
     where m = do
             modify (\s -> s { rettype = (toUnit t) })
-            modify (\s -> s { level = (level s) + 1 })
             mapM_ declareArg args
             stmts' <- mapM staticCheck_Stmt stmts
             let t' = toVoid t
             let args' = fmap toVoid args
-            modify (\s -> s { level = (level s) - 1 })
             return (FnDef voidT t' name args' (Bl voidT stmts'))
 staticCheck_TopDef t@(ClDef _ _ _) = return (toVoid t)
 
@@ -73,9 +71,7 @@ staticCheck_Stmt :: Stmt Pos -> CheckM (Stmt TType)
 staticCheck_Stmt (Empty _) = return (Empty voidT)
 staticCheck_Stmt (BStmt _ (Bl _ stmts)) = doWithSavedEnv m
     where m = do
-            modify (\s -> s { level = (level s) + 1 })
             stmts' <- mapM staticCheck_Stmt stmts
-            modify (\s -> s { level = (level s) - 1 })
             return (BStmt voidT (Bl voidT stmts'))
 staticCheck_Stmt (Decl _ t items) = do
     items' <- mapM (staticCheck_Decl (toUnit t)) items
@@ -236,12 +232,15 @@ staticCheck_Expr (EArrNew pos t expr) = do
     return (EArrNew newt (toVoid t) expr', newt)
 staticCheck_Expr (ELambda pos args stmt) = doWithSavedEnv m
     where m = do
-            mapM_ (\(Arg pos' t x) -> declareVar pos x (toUnit t)) args
-            stmt' <- staticCheck_Stmt stmt
+            tRetPrev <- gets rettype
+            mapM_ (\(Arg pos' t x) -> declareVar pos' x (toUnit t)) args
             tOut <- staticCheck_getRetExpr stmt
+            modify (\s -> s { rettype = tOut })
+            stmt' <- staticCheck_Stmt stmt
             let ts = map (\(Arg _ t _) -> toUnit t) args
             let t' = Fun () tOut ts
             let args' = fmap toVoid args
+            modify (\s -> s { rettype = tRetPrev })
             return (ELambda t' args' stmt', t')
 
 staticCheck_getRetExpr :: Stmt Pos -> CheckM TType

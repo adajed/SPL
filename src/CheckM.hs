@@ -138,8 +138,10 @@ declareTopDef (ClDef pos cls args) = do
 doWithSavedEnv :: CheckM a -> CheckM a
 doWithSavedEnv m = do
     env <- gets varEnv
+    modify (\s -> s { level = (level s) + 1 })
     r <- m
     modify (\s -> s { varEnv = env })
+    modify (\s -> s { level = (level s) - 1 })
     return r
 
 errorMsg :: Pos -> String -> CheckM a

@@ -15,6 +15,10 @@ import RemoveNop
 import TrivialPhiElimination
 import UnreachableCodeElimination
 
+basicOptimize :: Map VIdent BBGraph -> Map VIdent BBGraph
+basicOptimize = iterateUntilFixpoint opts
+    where opts = (Map.map (removeNop . deadCodeElimination . copyPropagation . constantFolding))
+
 optimize :: Map VIdent BBGraph -> Map VIdent BBGraph
 optimize program = iterateUntilFixpoint opts program
     where opts = (Map.mapWithKey unreachableCodeElimination)

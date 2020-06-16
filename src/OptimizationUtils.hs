@@ -44,6 +44,28 @@ takeVar (IR_Call x _ _) = Just x
 takeVar (IR_Phi x _) = Just x
 takeVar _ = Nothing
 
+maybeVar :: ValIR -> [SVar]
+maybeVar (VarIR x) = [x]
+maybeVar _ = []
+
+getAllVars :: IR -> [SVar]
+getAllVars (IR_Label _) = []
+getAllVars (IR_Ass x v) = x:(maybeVar v)
+getAllVars (IR_BinOp _ x v1 v2) = x:(concat (map maybeVar [v1, v2]))
+getAllVars (IR_UnOp _ x v) = x:(maybeVar v)
+getAllVars (IR_MemRead x v) = x:(maybeVar v)
+getAllVars (IR_MemSave v1 v2 _) = concat (map maybeVar [v1, v2])
+getAllVars (IR_Call y f xs) = [y] ++ maybeVar f ++ concat (map maybeVar xs)
+getAllVars (IR_VoidCall f xs) = maybeVar f ++ concat (map maybeVar xs)
+getAllVars (IR_Return v) = maybeVar v
+getAllVars (IR_VoidReturn) = []
+getAllVars (IR_Jump _) = []
+getAllVars (IR_CondJump v1 _ v2 _) = maybeVar v1 ++ maybeVar v2
+getAllVars (IR_Nop) = []
+getAllVars (IR_Argument x) = []
+getAllVars (IR_Store x) = [x]
+getAllVars (IR_Load x) = [x]
+
 mapIR :: (IR -> IR) -> BBGraph -> BBGraph
 mapIR f g = g { ids = M.map (\(BB name xs) -> BB name (map f xs)) (ids g) }
 

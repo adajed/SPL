@@ -1,0 +1,37 @@
+class Tree
+{
+    int elem;
+    Tree left, right;
+}
+
+Tree build(int c, Tree l, Tree r)
+{
+    Tree newt = new Tree;
+    newt.elem = c;
+    newt.left = l;
+    newt.right = r;
+    return newt;
+}
+
+Tree fmap(int(int) f, Tree t)
+{
+    if (t == null)
+        return null;
+
+    return build(f(t.elem), fmap(f, t.left), fmap(f, t.right));
+}
+
+int main()
+{
+    Tree t = build(0,
+                   build(1, null, null),
+                   build(2, null, null));
+
+    Tree newt = fmap(\int x -> return x * x + 1;, t);
+
+    printInt(newt.elem);
+    printInt(newt.left.elem);
+    printInt(newt.right.elem);
+
+    return 0;
+}

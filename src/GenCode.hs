@@ -40,6 +40,7 @@ emit :: Code -> GenCode ()
 emit c = modify (\s -> s { code = c:(code s) } )
 
 intToSize :: Int -> Size
+intToSize 0 = DWord
 intToSize 1 = Byte
 intToSize 2 = Word
 intToSize 4 = DWord

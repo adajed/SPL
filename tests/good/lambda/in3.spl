@@ -1,0 +1,24 @@
+int(int) app(int(int) f, int(int) g)
+{
+    return (\int x -> return f(g(x)););
+}
+
+int(int) fun(int s, int e)
+{
+    int i = s;
+    int(int) f = \int x -> { return x; } ;
+
+    while (i < e)
+    {
+        f = app(\int x -> { return x + i; }, f);
+        i++;
+    }
+    return f;
+}
+
+int main()
+{
+    int(int) f = fun(0, 10);
+    printInt(f(0));
+    return 0;
+}
