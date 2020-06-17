@@ -1,0 +1,17 @@
+int main()
+{
+    int size = 100;
+    bool[] isPrime = new bool[size];
+    for (i = 0 to size)
+        isPrime[i] = true;
+
+    for (i = 2 to size)
+        for (j = 2 * i to size by i)
+            isPrime[j] = false;
+
+    for (i = 2 to size)
+        if (isPrime[i])
+            printInt(i);
+
+    return 0;
+}

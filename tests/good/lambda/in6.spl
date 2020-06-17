@@ -1,0 +1,57 @@
+int(int(int, int)) make_pair(int n, int m)
+{
+    return \int(int, int) f -> return f(n, m); ;
+}
+
+int first(int(int(int, int)) p)
+{
+    return p(\int n, int m -> return n;);
+}
+
+int second(int(int(int, int)) p)
+{
+    return p(\int n, int m -> return m;);
+}
+
+int(int(int, int)) swap(int(int(int, int)) p)
+{
+    int n = first(p);
+    int m = second(p);
+    return \int(int, int) f -> return f(m, n); ;
+}
+
+int(int(int, int)) set_first(int(int(int, int)) p, int e)
+{
+    int n = e;
+    int m = second(p);
+    return \int(int, int) f -> return f(n, m); ;
+}
+
+int(int(int, int)) set_second(int(int(int, int)) p, int e)
+{
+    int n = first(p);
+    int m = e;
+    return \int(int, int) f -> return f(n, m); ;
+}
+
+int main()
+{
+    int(int(int, int)) p = make_pair(2, 3);
+    int(int(int, int)) p_swap = swap(p);
+    int(int(int, int)) p_f = set_first(p, 1);
+    int(int(int, int)) p_s = set_second(p, 1);
+
+    printInt(first(p));
+    printInt(second(p));
+
+    printInt(first(p_swap));
+    printInt(second(p_swap));
+
+    printInt(first(p_f));
+    printInt(second(p_f));
+
+    printInt(first(p_s));
+    printInt(second(p_s));
+
+    return 0;
+}
