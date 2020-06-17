@@ -96,7 +96,10 @@ instance Print (Program a) where
 instance Print (TopDef a) where
   prt i e = case e of
     FnDef _ type_ vident arguments block -> prPrec i 0 (concatD [prt 0 type_, prt 0 vident, doc (showString "("), prt 0 arguments, doc (showString ")"), prt 0 block])
-    ClDef _ cident classarguments -> prPrec i 0 (concatD [doc (showString "class"), prt 0 cident, doc (showString "{"), prt 0 classarguments, doc (showString "}")])
+    ClassDef _ cident extends classelems -> prPrec i 0 (concatD [doc (showString "class"),
+                                                            prt 0 cident, doc (showString "{"),
+                                                            prt 0 classelems,
+                                                            doc (showString "}")])
   prtList _ [x] = (concatD [prt 0 x])
   prtList _ (x:xs) = (concatD [prt 0 x, prt 0 xs])
 instance Print (Argument a) where
@@ -105,7 +108,7 @@ instance Print (Argument a) where
   prtList _ [] = (concatD [])
   prtList _ [x] = (concatD [prt 0 x])
   prtList _ (x:xs) = (concatD [prt 0 x, doc (showString ","), prt 0 xs])
-instance Print (ClassArgument a) where
+instance Print (ClassElem a) where
   prt i e = case e of
     Field _ type_ vidents -> prPrec i 0 (concatD [prt 0 type_, prt 0 vidents, doc (showString ";")])
   prtList _ [] = (concatD [])

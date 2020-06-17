@@ -13,7 +13,6 @@ import qualified Data.Set as S
 
 import LexSPL
 import ParSPL
-import SkelSPL
 import PrintSPL
 import AbsSPL
 

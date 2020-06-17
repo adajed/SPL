@@ -128,7 +128,7 @@ declareArg (Arg pos t name) = declareVar pos name (toUnit t)
 declareTopDef :: TopDef Pos -> CheckM ()
 declareTopDef (FnDef pos t name args _) =
     declareVar pos name (funT (toUnit t) (map getArgType args))
-declareTopDef (ClDef pos cls args) = do
+declareTopDef (ClassDef pos cls extends args) = do
     let addField t m x = M.insert x t m
     let addArg m (Field _ t xs) = foldl (addField (toUnit t)) m xs
     let fieldMap = foldl addArg M.empty args

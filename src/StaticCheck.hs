@@ -65,7 +65,7 @@ staticCheck_TopDef (FnDef _ t name args (Bl _ stmts)) = doWithSavedEnv m
             let t' = toVoid t
             let args' = fmap toVoid args
             return (FnDef voidT t' name args' (Bl voidT stmts'))
-staticCheck_TopDef t@(ClDef _ _ _) = return (toVoid t)
+staticCheck_TopDef t@(ClassDef _ _ _ _) = return (toVoid t)
 
 staticCheck_Stmt :: Stmt Pos -> CheckM (Stmt TType)
 staticCheck_Stmt (Empty _) = return (Empty voidT)

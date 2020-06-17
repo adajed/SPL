@@ -217,7 +217,8 @@ resWords = ["!",
             "to",
             "down",
             "in",
-            "by"]
+            "by",
+            "extends"]
 
 resWordsMap :: M.Map String Tok
 resWordsMap = M.fromList (map (\(s, i) -> (s, TS s i)) (zip resWords [1..]))

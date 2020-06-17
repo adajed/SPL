@@ -65,6 +65,7 @@ import ErrM
   'down' { PT _ (TS _ 50) }
   'in' { PT _ (TS _ 51) }
   'by' { PT _ (TS _ 52) }
+  'extends' { PT _ (TS _ 53) }
 
 L_integ  { PT _ (TI _) }
 L_CIdent { PT _ (T_CIdent _) }
@@ -95,8 +96,11 @@ TopDef
 : Type VIdent '(' ListArgument ')' Block {
     (fst $1, AbsSPL.FnDef (fst $1) (snd $1) (snd $2) (snd $4) (snd $6))
 }
-| 'class' CIdent '{' ListClassArgument '}' {
-    (Just (tokenLineCol $1), AbsSPL.ClDef (Just (tokenLineCol $1)) (snd $2) (reverse (snd $4)))
+| 'class' CIdent '{' ListClassElem '}' {
+    (Just (tokenLineCol $1), AbsSPL.ClassDef (Just (tokenLineCol $1)) (snd $2) (AbsSPL.NoExtends Nothing) (reverse (snd $4)))
+}
+| 'class' CIdent 'extends' CIdent '{' ListClassElem '}' {
+    (Just (tokenLineCol $1), AbsSPL.ClassDef (Just (tokenLineCol $1)) (snd $2) (AbsSPL.Extends (fst $4) (snd $4)) (reverse (snd $6)))
 }
 
 ListTopDef :: { (Pos, [TopDef Pos]) }
@@ -126,10 +130,13 @@ ListArgument
     (fst $1, (snd $1):(snd $3))
 }
 
-ClassArgument :: { (Pos, ClassArgument Pos) }
-ClassArgument
+ClassElem :: { (Pos, ClassElem Pos) }
+ClassElem
 : Type ListVIdent ';' {
     (fst $1, AbsSPL.Field (fst $1) (snd $1) (snd $2))
+}
+| Type VIdent ListArgument Block {
+    (fst $1, AbsSPL.Method (fst $1) (snd $1) (snd $2) (snd $3) (snd $4))
 }
 
 ListVIdent :: { (Pos, [VIdent]) }
@@ -141,12 +148,12 @@ ListVIdent
     (fst $1, (snd $1):(snd $3))
 }
 
-ListClassArgument :: { (Pos, [ClassArgument Pos]) }
-ListClassArgument
+ListClassElem :: { (Pos, [ClassElem Pos]) }
+ListClassElem
 : {- empty -} {
     (Nothing, [])
 }
-| ListClassArgument ClassArgument {
+| ListClassElem ClassElem {
     (fst $1, (snd $2):(snd $1))
 }
 

@@ -98,14 +98,14 @@ declareVar t name = do
 
 declareTopDef :: TopDef T -> GenerateIR ()
 declareTopDef (FnDef _ _ name _ _) = return ()
-declareTopDef (ClDef _ name args) =
+declareTopDef (ClassDef _ name _ args) =
     let info = generateOffsets args
      in modify (\s -> s { classInfo = M.insert name info (classInfo s) })
 
-generateOffsets :: [ClassArgument T] -> ClassInfo
+generateOffsets :: [ClassElem T] -> ClassInfo
 generateOffsets args = foldl h initInfo args
     where initInfo = ClassInfo { classSize = 4, fieldType = M.empty, fieldOffset = M.empty, fieldSize = M.empty }
-          h :: ClassInfo -> ClassArgument T -> ClassInfo
+          h :: ClassInfo -> ClassElem T -> ClassInfo
           h acc (Field _ t xs) = foldl (h' (sizeOf t) (fmap (const ()) t)) acc xs
           h' :: Int -> T -> ClassInfo -> VIdent -> ClassInfo
           h' size t acc name = ClassInfo { classSize = (classSize acc) + size
@@ -199,7 +199,7 @@ generateIR_TopDef (FnDef _ t name args bl) = do
     generateIR_Stmt (BStmt (Void ()) bl)
     void popEnv
     modify (\s -> s { output = M.insert name ((reverse . currentOutput) s) (output s) } )
-generateIR_TopDef (ClDef _ _ _) = return ()
+generateIR_TopDef (ClassDef _ _ _ _) = return ()
 
 declareArg :: Argument T -> GenerateIR ()
 declareArg (Arg _ t name) = do
