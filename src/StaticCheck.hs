@@ -114,6 +114,38 @@ staticCheck_Stmt (While pos e s) = do
     assertTypesEqual pos boolT t
     s' <- staticCheck_Stmt s
     return (While voidT e' s')
+staticCheck_Stmt (ForUp pos name e1 e2 e3 s) = do
+    (e1', t1) <- staticCheck_Expr e1
+    (e2', t2) <- staticCheck_Expr e2
+    (e3', t3) <- staticCheck_Expr e3
+    assertTypesEqual (getPos_Expr e1) intT t1
+    assertTypesEqual (getPos_Expr e2) intT t2
+    assertTypesEqual (getPos_Expr e3) intT t3
+    let m = do
+            declareVar Nothing name intT
+            staticCheck_Stmt s
+    s' <- doWithSavedEnv m
+    return (ForUp voidT name e1' e2' e3' s')
+staticCheck_Stmt (ForDown pos name e1 e2 e3 s) = do
+    (e1', t1) <- staticCheck_Expr e1
+    (e2', t2) <- staticCheck_Expr e2
+    (e3', t3) <- staticCheck_Expr e3
+    assertTypesEqual (getPos_Expr e1) intT t1
+    assertTypesEqual (getPos_Expr e2) intT t2
+    assertTypesEqual (getPos_Expr e3) intT t3
+    let m = do
+            declareVar Nothing name intT
+            staticCheck_Stmt s
+    s' <- doWithSavedEnv m
+    return (ForDown voidT name e1' e2' e3' s')
+staticCheck_Stmt (ForEach pos name e s) = do
+    (e', t) <- staticCheck_Expr e
+    elemType <- tryGetArrayType (getPos_Expr e) t
+    let m = do
+            declareVar Nothing name elemType
+            staticCheck_Stmt s
+    s' <- doWithSavedEnv m
+    return (ForEach voidT name e' s')
 staticCheck_Stmt (SExp _ e) = do
     (e', _) <- staticCheck_Expr e
     return (SExp voidT e')

@@ -426,6 +426,62 @@ generateIR_Stmt (While _ expr stmt) = do
     emitIR (IR_Label lCheck)
     generateIR_JumpExpr expr lTrue lFalse
     emitIR (IR_Label lFalse)
+generateIR_Stmt (ForUp _ name exprS exprE exprI stmt) = do
+    lLoop <- getFreshLabel
+    lEnd <- getFreshLabel
+    valS <- generateIR_Expr exprS
+    valE <- generateIR_Expr exprE
+    valI <- generateIR_Expr exprI
+    i <- emitIR_ToTemp 4 (\t -> IR_Ass t valS)
+    emitIR (IR_Jump lEnd)
+    emitIR (IR_Label lLoop)
+    let env = M.fromList [(name, (i, Int ()))]
+    modify (\s -> s { varenv = env:(varenv s) })
+    generateIR_Stmt stmt
+    temp <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp IAdd t (VarIR i) valI)
+    emitIR (IR_Ass i temp)
+    void popEnv
+    emitIR (IR_Label lEnd)
+    emitIR (IR_CondJump (VarIR i) IR.LTH valE lLoop)
+generateIR_Stmt (ForDown _ name exprS exprE exprI stmt) = do
+    lLoop <- getFreshLabel
+    lEnd <- getFreshLabel
+    valS <- generateIR_Expr exprS
+    valE <- generateIR_Expr exprE
+    valI <- generateIR_Expr exprI
+    i <- emitIR_ToTemp 4 (\t -> IR_Ass t valS)
+    emitIR (IR_Jump lEnd)
+    emitIR (IR_Label lLoop)
+    let env = M.fromList [(name, (i, Int ()))]
+    modify (\s -> s { varenv = env:(varenv s) })
+    generateIR_Stmt stmt
+    temp <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp ISub t (VarIR i) valI)
+    emitIR (IR_Ass i temp)
+    void popEnv
+    emitIR (IR_Label lEnd)
+    emitIR (IR_CondJump (VarIR i) IR.GTH valE lLoop)
+generateIR_Stmt (ForEach _ name expr stmt) = do
+    lLoop <- getFreshLabel
+    lEnd <- getFreshLabel
+    let (Array _ ty) = exprType expr
+    arr <- generateIR_Expr expr
+    sizePtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t arr (IntIR 4 8))
+    size <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_MemRead t sizePtr)
+    arrStart <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t arr (IntIR 8 8))
+    i <- emitIR_ToTemp 4 (\t -> IR_Ass t (IntIR 0 4))
+    emitIR (IR_Jump lEnd)
+    emitIR (IR_Label lLoop)
+    temp <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp IMul t (VarIR i) (IntIR (sizeOf ty) 4))
+    elemPtr <- liftM VarIR $ emitIR_ToTemp 8 (\t -> IR_BinOp IAdd t arrStart temp)
+    elem <- emitIR_ToTemp (sizeOf ty) (\t -> IR_MemRead t elemPtr)
+    let env = M.fromList [(name, (elem, ty))]
+    modify (\s -> s { varenv = env:(varenv s) })
+    generateIR_Stmt stmt
+    temp <- liftM VarIR $ emitIR_ToTemp 4 (\t -> IR_BinOp IAdd t (VarIR i) (IntIR 1 4))
+    emitIR (IR_Ass i temp)
+    void popEnv
+    emitIR (IR_Label lEnd)
+    emitIR (IR_CondJump (VarIR i) IR.LTH size lLoop)
 generateIR_Stmt (SExp _ expr) = do
     value <- generateIR_Expr expr
     return ()
