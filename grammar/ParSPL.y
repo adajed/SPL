@@ -60,6 +60,11 @@ import ErrM
   '||' { PT _ (TS _ 45) }
   '}' { PT _ (TS _ 46) }
   '~' { PT _ (TS _ 47) }
+  'for' { PT _ (TS _ 48) }
+  'to' { PT _ (TS _ 49) }
+  'down' { PT _ (TS _ 50) }
+  'in' { PT _ (TS _ 51) }
+  'by' { PT _ (TS _ 52) }
 
 L_integ  { PT _ (TI _) }
 L_CIdent { PT _ (T_CIdent _) }
@@ -194,6 +199,21 @@ Stmt
 }
 | 'while' '(' Expr ')' Stmt {
     (Just (tokenLineCol $1), AbsSPL.While (Just (tokenLineCol $1)) (snd $3) (snd $5))
+}
+| 'for' '(' VIdent '=' Expr 'to' Expr ')' Stmt {
+    (Just (tokenLineCol $1), AbsSPL.ForUp (Just (tokenLineCol $1)) (snd $3) (snd $5) (snd $7) (AbsSPL.EInt Nothing 1) (snd $9))
+}
+| 'for' '(' VIdent '=' Expr 'to' Expr 'by' Expr ')' Stmt {
+    (Just (tokenLineCol $1), AbsSPL.ForUp (Just (tokenLineCol $1)) (snd $3) (snd $5) (snd $7) (snd $9) (snd $11))
+}
+| 'for' '(' VIdent '=' Expr 'down' 'to' Expr ')' Stmt {
+    (Just (tokenLineCol $1), AbsSPL.ForDown (Just (tokenLineCol $1)) (snd $3) (snd $5) (snd $8) (AbsSPL.EInt Nothing 1) (snd $10))
+}
+| 'for' '(' VIdent '=' Expr 'down' 'to' Expr 'by' Expr ')' Stmt {
+    (Just (tokenLineCol $1), AbsSPL.ForUp (Just (tokenLineCol $1)) (snd $3) (snd $5) (snd $8) (snd $10) (snd $12))
+}
+| 'for' '(' VIdent 'in' Expr ')' Stmt {
+    (Just (tokenLineCol $1), AbsSPL.ForEach (Just (tokenLineCol $1)) (snd $3) (snd $5) (snd $7))
 }
 | Expr ';' {
     (fst $1, AbsSPL.SExp (fst $1) (snd $1))

@@ -10,6 +10,7 @@ module LexSPL where
 import qualified Data.Bits
 import Data.Word (Word8)
 import Data.Char (ord)
+import qualified Data.Map as M
 }
 
 
@@ -95,20 +96,67 @@ prToken t = case t of
   PT _ (T_VIdent s) -> s
 
 
-data BTree = N | B String Tok BTree BTree deriving (Show)
-
 eitherResIdent :: (String -> Tok) -> String -> Tok
-eitherResIdent tv s = treeFind resWords
-  where
-  treeFind N = tv s
-  treeFind (B a t left right) | s < a  = treeFind left
-                              | s > a  = treeFind right
-                              | s == a = t
+eitherResIdent tv s = case resWordsMap M.!? s of
+                        Nothing -> tv s
+                        Just t -> t
 
-resWords :: BTree
-resWords = b ">=" 24 (b "-" 12 (b "(" 6 (b "%" 3 (b "!=" 2 (b "!" 1 N N) N) (b "&&" 5 (b "&" 4 N N) N)) (b "+" 9 (b "*" 8 (b ")" 7 N N) N) (b "," 11 (b "++" 10 N N) N))) (b "<" 18 (b "." 15 (b "->" 14 (b "--" 13 N N) N) (b ";" 17 (b "/" 16 N N) N)) (b "=" 21 (b "<=" 20 (b "<<" 19 N N) N) (b ">" 23 (b "==" 22 N N) N)))) (b "int" 36 (b "^" 30 (b "[]" 27 (b "[" 26 (b ">>" 25 N N) N) (b "]" 29 (b "\\" 28 N N) N)) (b "else" 33 (b "class" 32 (b "bool" 31 N N) N) (b "if" 35 (b "false" 34 N N) N))) (b "while" 42 (b "return" 39 (b "null" 38 (b "new" 37 N N) N) (b "void" 41 (b "true" 40 N N) N)) (b "||" 45 (b "|" 44 (b "{" 43 N N) N) (b "~" 47 (b "}" 46 N N) N))))
-   where b s n = let bs = id s
-                  in B bs (TS bs n)
+resWords :: [String]
+resWords = ["!",
+            "!=",
+            "%",
+            "&",
+            "&&",
+            "(",
+            ")",
+            "*" ,
+            "+",
+            "++",
+            ",",
+            "-",
+            "--",
+            "->",
+            ".",
+            "/",
+            ";",
+            "<",
+            "<<",
+            "<=",
+            "=",
+            "==",
+            ">",
+            ">=",
+            ">>",
+            "[",
+            "[]",
+            "\\",
+            "]",
+            "^",
+            "bool",
+            "class",
+            "else",
+            "false",
+            "if",
+            "int",
+            "new",
+            "null",
+            "return" ,
+            "true",
+            "void",
+            "while",
+            "{",
+            "|",
+            "||",
+            "}",
+            "~",
+            "for",
+            "to",
+            "down",
+            "in",
+            "by"]
+
+resWordsMap :: M.Map String Tok
+resWordsMap = M.fromList (map (\(s, i) -> (s, TS s i)) (zip resWords [1..]))
 
 unescapeInitTail :: String -> String
 unescapeInitTail = id . unesc . tail . id where
