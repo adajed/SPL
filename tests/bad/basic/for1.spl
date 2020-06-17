@@ -1,0 +1,6 @@
+int main()
+{
+    for (i = 0 to false)
+        printInt(i);
+    return 0;
+}

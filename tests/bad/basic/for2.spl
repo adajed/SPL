@@ -1,0 +1,6 @@
+int main()
+{
+    for (i in 5)
+        printInt(i);
+    return 0;
+}
