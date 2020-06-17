@@ -1,12 +1,8 @@
 int sum(int s, int e)
 {
     int sum = 0;
-    int i = s;
-    while (i <= e)
-    {
+    for (i = s to e + 1)
         sum = sum + i;
-        i++;
-    }
 
     return sum;
 }
@@ -14,12 +10,8 @@ int sum(int s, int e)
 int sum_squares(int s, int e)
 {
     int sum = 0;
-    int i = s;
-    while (i <= e)
-    {
+    for (i = s to e + 1)
         sum = sum + i * i;
-        i++;
-    }
 
     return sum;
 }

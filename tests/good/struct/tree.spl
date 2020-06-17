@@ -25,12 +25,8 @@ ListInt prefix(TreeInt t)
 
 ListInt prefix_2(TreeInt t, ListInt acc)
 {
-    int i = t.children.length - 1;
-    while (i >= 0)
-    {
+    for (i = t.children.length - 1 down to -1)
         acc = prefix_2(t.children[i], acc);
-        i--;
-    }
     return c(t.elem, acc);
 }
 

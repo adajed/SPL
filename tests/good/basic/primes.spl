@@ -1,21 +1,18 @@
 int main()
 {
-    int n = 2;
-    while (n < 20)
+    for (n = 2 to 20)
     {
         int i = 2;
         bool isPrime = true;
         while (i * i <= n)
         {
             if (n % i == 0)
-            isPrime = false;
+                isPrime = false;
             i++;
         }
 
         if (isPrime)
             printInt(n);
-
-        n++;
     }
 
     return 0;

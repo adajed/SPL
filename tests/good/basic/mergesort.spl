@@ -54,12 +54,8 @@ void mergesort(int[] arr, int s, int e)
 
 void printArray(int[] arr)
 {
-    int i = 0;
-    while (i < arr.length)
-    {
+    for (i = 0 to arr.length)
         printInt(arr[i]);
-        i++;
-    }
 
     return;
 }
@@ -70,11 +66,9 @@ int main()
     int[] arr = new int[n];
 
     int b = 1;
-    int i = 0;
-    while (i < arr.length)
+    for (i = 0 to arr.length)
     {
         arr[i] = b * i * i;
-        i++;
         b = -b;
     }
 
