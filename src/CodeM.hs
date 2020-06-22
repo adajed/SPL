@@ -2,6 +2,7 @@ module CodeM where
 
 import AbsSPL
 import IR
+import Token ( VIdent )
 
 import Data.List ( intercalate )
 

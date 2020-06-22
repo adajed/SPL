@@ -1,0 +1,39 @@
+class Square
+{
+    int length;
+
+    constr (int l)
+    {
+        length = l;
+    }
+
+    int getLength()
+    {
+        return length;
+    }
+
+    void setLength(int l)
+    {
+        length = l;
+        return;
+    }
+
+    int area()
+    {
+        return length * length;
+    }
+}
+
+int main()
+{
+    Square sq = new Square(1);
+    sq.setLength(5);
+    printInt(sq.getLength());
+    printInt(sq.area());
+    sq.setLength(7);
+    printInt(sq.getLength());
+    printInt(sq.area());
+
+    return 0;
+}
+

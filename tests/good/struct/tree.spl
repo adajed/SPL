@@ -1,57 +1,59 @@
-class TreeInt
+class Tree
 {
     int elem;
-    TreeInt[] children;
+    Tree[] children;
+
+    constr (int e, Tree[] c)
+    {
+        elem = e;
+        children = c;
+    }
+
+    constr (int e)
+    {
+        elem = e;
+        children = new Tree[0];
+    }
+
+    constr (int e, Tree l, Tree r)
+    {
+        elem = e;
+        children = new Tree[2];
+        children[0] = l;
+        children[1] = r;
+    }
 }
 
-class ListInt
+class List
 {
     int elem;
-    ListInt next;
+    List next;
+
+    constr (int h, List t)
+    {
+        elem = h;
+        next = t;
+    }
 }
 
-ListInt c(int head, ListInt tail)
-{
-    ListInt newlist = new ListInt;
-    newlist.elem = head;
-    newlist.next = tail;
-    return newlist;
-}
-
-ListInt prefix(TreeInt t)
+List prefix(Tree t)
 {
     return prefix_2(t, null);
 }
 
-ListInt prefix_2(TreeInt t, ListInt acc)
+List prefix_2(Tree t, List acc)
 {
     for (i = t.children.length - 1 down to -1)
         acc = prefix_2(t.children[i], acc);
-    return c(t.elem, acc);
-}
-
-TreeInt node(int elem, TreeInt left, TreeInt right)
-{
-    TreeInt t = new TreeInt;
-    t.elem = elem;
-    t.children = new TreeInt[2];
-    t.children[0] = left;
-    t.children[1] = right;
-    return t;
-}
-
-TreeInt leaf(int elem)
-{
-    TreeInt t = new TreeInt;
-    t.elem = elem;
-    t.children = new TreeInt[0];
-    return t;
+    return new List(t.elem, acc);
 }
 
 int main()
 {
-    TreeInt t = node(1, node(2, leaf(3), leaf(4)), node(5, leaf(6), leaf(7)));
-    ListInt l = prefix(t);
+    Tree t = new Tree(1,
+                      new Tree(2, new Tree(3), new Tree(4)),
+                      new Tree(5, new Tree(6), new Tree(7)));
+    List l = prefix(t);
 
     while (l != null)
     {

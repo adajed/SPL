@@ -1,0 +1,121 @@
+class Gen
+{
+    int next()
+    {
+        return 0;
+    }
+
+    bool hasNext()
+    {
+        return false;
+    }
+}
+
+class GenArray extends Gen
+{
+    int[] arr;
+    int pos;
+
+    constr (int[] a)
+    {
+        arr = a;
+        pos = 0;
+    }
+
+    int next()
+    {
+        int e = arr[pos];
+        pos++;
+        return e;
+    }
+
+    bool hasNext()
+    {
+        return pos < arr.length;
+    }
+}
+
+class GenNat extends Gen
+{
+    int n;
+
+    constr ()
+    {
+        n = 0;
+    }
+
+    int next()
+    {
+        int e = n;
+        n++;
+        return e;
+    }
+
+    bool hasNext()
+    {
+        return true;
+    }
+}
+
+class GenFilter extends Gen
+{
+    bool(int) filter;
+    Gen gen;
+
+    constr (bool(int) f, Gen g)
+    {
+        filter = f;
+        gen = g;
+    }
+
+    int next()
+    {
+        while (gen.hasNext())
+        {
+            int elem = gen.next();
+            if (filter(elem))
+                return elem;
+        }
+        return -1;
+    }
+
+    bool hasNext()
+    {
+        return gen.hasNext();
+    }
+}
+
+class GenPrime extends Gen
+{
+    Gen nat;
+
+    constr ()
+    {
+        nat = new GenNat();
+        nat.next();
+        nat.next();
+    }
+
+    int next()
+    {
+        int elem = nat.next();
+
+        nat = new GenFilter(\int n -> return n % elem != 0;, nat);
+
+        return elem;
+    }
+
+    bool hasNext()
+    {
+        return true;
+    }
+}
+
+int main()
+{
+    Gen g = new GenPrime();
+    for (i = 0 to 20)
+        printInt(g.next());
+
+    return 0;
+}

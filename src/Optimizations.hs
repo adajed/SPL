@@ -12,6 +12,7 @@ import DeadCodeElimination
 import GlobalCommonSubexpressionElimination
 import LocalCommonSubexpressionElimination
 import RemoveNop
+import Token
 import TrivialPhiElimination
 import UnreachableCodeElimination
 

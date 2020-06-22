@@ -1,0 +1,30 @@
+class Counter
+{
+    int cnt;
+
+    constr (int c)
+    {
+        cnt = c;
+    }
+
+    Counter increment()
+    {
+        cnt++;
+        return self;
+    }
+
+    void printCount()
+    {
+        printInt(cnt);
+    }
+}
+
+int main()
+{
+    Counter c = new Counter(1);
+
+    c.printCount();
+    c.increment().increment().increment().printCount();
+
+    return 0;
+}

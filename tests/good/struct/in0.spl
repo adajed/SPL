@@ -1,63 +1,43 @@
-class ListInt {
-    int elem;
-    ListInt next;
+class List {
+    int head;
+    List tail;
+
+    constr (int n, List l)
+    {
+        head = n;
+        tail = l;
+    }
 }
 
-int head(ListInt l)
+List reverse(List l)
 {
-    if (l == null)
-        return -1;
-    return l.elem;
-}
-
-ListInt tail(ListInt l)
-{
-    if (l == null)
-        return null;
-    return l.next;
-}
-
-ListInt reverse(ListInt l)
-{
-    ListInt acc = null;
+    List acc = null;
 
     while (l != null)
     {
-        ListInt temp = new ListInt;
-        temp.elem = l.elem;
-        temp.next = acc;
-        acc = temp;
-
-        l = l.next;
+        acc = new List(l.head, acc);
+        l = l.tail;
     }
 
     return acc;
 }
 
-void printListInt(ListInt l)
+void printListInt(List l)
 {
     while (l != null)
     {
-        printInt(l.elem);
-        l = l.next;
+        printInt(l.head);
+        l = l.tail;
     }
 
     return;
 }
 
-ListInt listFromArray(int[] arr, int n)
+List listFromArray(int[] arr)
 {
-    ListInt acc = null;
-    int i = n - 1;
-    while (i >= 0)
-    {
-        ListInt temp = new ListInt;
-        temp.elem = arr[i];
-        temp.next = acc;
-        acc = temp;
-        i--;
-    }
-
+    List acc = null;
+    for (i = arr.length - 1 down to -1)
+        acc = new List(arr[i], acc);
     return acc;
 }
 
@@ -65,18 +45,14 @@ int main()
 {
     int n = 10;
     int[] arr = new int[n];
-    int i = 0;
-    while (i < n)
-    {
+    for (i = 0 to n)
         arr[i] = i;
-        i++;
-    }
 
-    ListInt l = listFromArray(arr, n);
+    List l = listFromArray(arr);
 
     printListInt(l);
 
-    ListInt l2 = reverse(l);
+    List l2 = reverse(l);
 
     printListInt(l2);
 

@@ -5,6 +5,8 @@ module ParSPL where
 import AbsSPL
 import LexSPL
 import ErrM
+import Token
+import Type
 
 }
 
@@ -66,6 +68,7 @@ import ErrM
   'in' { PT _ (TS _ 51) }
   'by' { PT _ (TS _ 52) }
   'extends' { PT _ (TS _ 53) }
+  'constr' { PT _ (TS _ 54) }
 
 L_integ  { PT _ (TI _) }
 L_CIdent { PT _ (T_CIdent _) }
@@ -135,8 +138,11 @@ ClassElem
 : Type ListVIdent ';' {
     (fst $1, AbsSPL.Field (fst $1) (snd $1) (snd $2))
 }
-| Type VIdent ListArgument Block {
-    (fst $1, AbsSPL.Method (fst $1) (snd $1) (snd $2) (snd $3) (snd $4))
+| 'constr' '(' ListArgument ')' Block {
+    (Just (tokenLineCol $1), AbsSPL.Constr (Just (tokenLineCol $1)) (snd $3) (snd $5))
+}
+| Type VIdent '(' ListArgument ')' Block {
+    (fst $1, AbsSPL.Method (fst $1) (snd $1) (snd $2) (snd $4) (snd $6))
 }
 
 ListVIdent :: { (Pos, [VIdent]) }
@@ -247,22 +253,23 @@ ListItem
 Type :: { (Pos, Type Pos) }
 Type
 : 'int' {
-    (Just (tokenLineCol $1), AbsSPL.Int (Just (tokenLineCol $1)))
+    (Just (tokenLineCol $1), Type.Int (Just (tokenLineCol $1)))
 }
 | 'bool' {
-    (Just (tokenLineCol $1), AbsSPL.Bool (Just (tokenLineCol $1)))
+    (Just (tokenLineCol $1), Type.Bool (Just (tokenLineCol $1)))
 }
 | 'void' {
-    (Just (tokenLineCol $1), AbsSPL.Void (Just (tokenLineCol $1)))
+    (Just (tokenLineCol $1), Type.Void (Just (tokenLineCol $1)))
 }
 | CIdent {
-    (fst $1, AbsSPL.Class (fst $1) (snd $1))
+    (fst $1, Type.Class (fst $1) (snd $1))
+
 }
 | Type '[]' {
-    (fst $1, AbsSPL.Array (fst $1) (snd $1))
+    (fst $1, Type.Array (fst $1) (snd $1))
 }
 | Type '(' ListType ')' {
-    (fst $1, AbsSPL.Fun (fst $1) (snd $1) (snd $3))
+    (fst $1, Type.Fun (fst $1) (snd $1) (snd $3))
 }
 
 ListType :: { (Pos, [Type Pos]) }
@@ -357,8 +364,8 @@ Expr
 : Expr1 '||' Expr {
     (fst $1, AbsSPL.EOr (fst $1) (snd $1) (snd $3))
 }
-| 'new' CIdent {
-    (Just (tokenLineCol $1), AbsSPL.EObjNew (Just (tokenLineCol $1)) (snd $2))
+| 'new' CIdent '(' ListExpr ')' {
+    (Just (tokenLineCol $1), AbsSPL.EObjNew (Just (tokenLineCol $1)) (snd $2) (snd $4))
 }
 | 'new' Type '[' Expr ']' {
     (Just (tokenLineCol $1), AbsSPL.EArrNew (Just (tokenLineCol $1)) (snd $2) (snd $4))

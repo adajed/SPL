@@ -2,7 +2,7 @@ module IR where
 
 import Data.List ( intercalate )
 
-import AbsSPL ( VIdent )
+import Token ( VIdent )
 
 data Var = VarN VIdent | VarT Int | VarC VIdent Int | VarA Int
     deriving (Eq, Ord)
@@ -108,3 +108,9 @@ instance Show IR where
                 IR_Load x               -> c ["load", show x]
             where c = intercalate " "
 
+data DataIR = IR_DataQ ValIR
+    deriving (Eq, Ord)
+instance Show DataIR where
+    show ir = case ir of
+                IR_DataQ v  -> c ["dq", show v]
+            where c = intercalate " "

@@ -11,6 +11,7 @@ import BasicBlock
 import CalculateLiveVars
 import CodeM
 import IR
+import Token
 
 data Node = NVar SVar | NReg Reg
     deriving (Eq, Ord)

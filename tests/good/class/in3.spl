@@ -1,0 +1,59 @@
+class Vector
+{
+    int[] arr;
+    int size;
+
+    constr (int s)
+    {
+        arr = new int[s];
+        size = 0;
+    }
+
+    void resize()
+    {
+        int[] newarr = new int[arr.length * 2];
+
+        for (i = 0 to arr.length)
+            newarr[i] = arr[i];
+
+        arr = newarr;
+    }
+
+    void push(int elem)
+    {
+        if (size >= arr.length)
+            resize();
+        arr[size] = elem;
+        size++;
+        return;
+    }
+
+    int getElem(int pos)
+    {
+        return arr[pos];
+    }
+
+    int setElem(int pos, int value)
+    {
+        arr[pos] = value;
+    }
+
+    int getSize()
+    {
+        return size;
+    }
+}
+
+int main()
+{
+    int size = 10;
+    Vector v = new Vector(size);
+
+    for (i = 0 to 3 * size)
+        v.push(i);
+
+    for (i = 0 to v.getSize())
+        printInt(v.getElem(i));
+
+    return 0;
+}

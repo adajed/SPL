@@ -1,0 +1,58 @@
+class Expr
+{
+    int eval()
+    {
+        return 0;
+    }
+}
+
+class Const extends Expr
+{
+    int value;
+
+    constr (int v)
+    {
+        value = v;
+    }
+
+    int eval()
+    {
+        return value;
+    }
+}
+
+class BinOp extends Expr
+{
+    Expr exprLeft, exprRight;
+
+    int op(int left, int right)
+    {
+        return 0;
+    }
+
+    int eval()
+    {
+        return op(exprLeft.eval(), exprRight.eval());
+    }
+}
+
+class Add extends BinOp
+{
+    constr (Expr l, Expr r)
+    {
+        exprLeft = l;
+        exprRight = r;
+    }
+
+    int op(int left, int right)
+    {
+        return left + right;
+    }
+}
+
+int main()
+{
+    Expr e = new Add(new Const(1), new Const(2));
+    printInt(e.eval());
+    return 0;
+}

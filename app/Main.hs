@@ -6,6 +6,8 @@ import System.Environment ( getArgs, getProgName )
 import System.Exit ( exitFailure, exitSuccess )
 import System.Process
 
+import Debug.Trace as Trace
+
 import Control.Monad ( liftM, when )
 
 import qualified Data.Map as M
@@ -20,6 +22,7 @@ import ArgParse
 import CalculateLiveVars
 import CodeM
 import FinishOptimizations
+import GenIR
 import GenerateIR ( runGenerateIR )
 import GenCode ( genCode )
 import GraphColoring ( colorBBGraph )
@@ -27,6 +30,7 @@ import ErrM
 import IR
 import BasicBlock
 import Optimizations
+import Token
 import StaticCheck
 import SSA
 
@@ -94,15 +98,23 @@ writeCode h (fName, xs) = do
     mapM_ f xs
     hPutStrLn h ""
 
-compileProgram :: String -> Err (Program (), M.Map VIdent BBGraph,  M.Map VIdent [Code])
+writeIRData :: Handle -> (VIdent, [DataIR]) -> IO ()
+writeIRData h (fName, xs) = do
+    hPutStrLn h ("; " ++ show fName ++ "\n")
+    hPutStrLn h (show fName ++ ":")
+    let f c = hPutStrLn h ("\t" ++ show c)
+    mapM_ f xs
+    hPutStrLn h ""
+
+compileProgram :: String -> Err (Program (), M.Map VIdent BBGraph,  M.Map VIdent [Code], M.Map VIdent [DataIR])
 compileProgram fileContent = do
     let abstractTree = lexer fileContent
     program <- parser abstractTree
     program' <- staticCheck program
-    code <- runGenerateIR program'
-    ir <- optimizeCode code
+    programir <- runGenerateIR program'
+    ir <- optimizeCode (textSection programir)
     let code = M.map genCode ir
-    return (fmap (const ()) program, ir, code)
+    return (fmap (const ()) program, ir, code, dataSection programir)
 
 
 optimizeCode :: M.Map VIdent [IR] -> Err (M.Map VIdent BBGraph)
@@ -122,7 +134,7 @@ run bShowTree bSaveIR filepath = do
       Bad errorMsg -> do
           hPutStrLn stderr errorMsg
           exitFailure
-      Ok (program, ir, code) -> do
+      Ok (program, ir, code, datair) -> do
           when bShowTree (hPutStrLn stdout (printTree program))
           let fileIR = changeExtension filepath "ir"
           let fileCode = changeExtension filepath "s"
@@ -131,9 +143,12 @@ run bShowTree bSaveIR filepath = do
           when bSaveIR (do
               handleIR <- openFile fileIR WriteMode
               mapM_ (writeIR handleIR) (M.assocs ir)
+              mapM_ (writeIRData handleIR) (M.assocs datair)
               hClose handleIR)
           handleCode <- openFile fileCode WriteMode
           writeCodeMap handleCode code
+          hPutStrLn handleCode "\tsection .data\n"
+          mapM_ (writeIRData handleCode) (M.assocs datair)
           hClose handleCode
           callCommand ("nasm -felf64 -o " ++ fileObj ++ " " ++ fileCode)
           callCommand ("gcc -no-pie -o " ++ fileOut ++ " " ++ fileObj ++ " lib/runtime.o")

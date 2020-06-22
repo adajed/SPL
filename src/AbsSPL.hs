@@ -1,14 +1,7 @@
 module AbsSPL where
 
-
-newtype CIdent = CIdent String deriving (Eq, Ord, Read)
-instance Show CIdent where
-    show (CIdent name) = name
-
-newtype VIdent = VIdent String deriving (Eq, Ord, Read)
-instance Show VIdent where
-    show (VIdent name) = name
-
+import Token
+import Type
 
 -- program
 data Program a = Prog a [TopDef a]
@@ -43,12 +36,14 @@ instance Functor Argument where
 -- class element (field, method)
 data ClassElem a
     = Field a (Type a) [VIdent]
+    | Constr a [Argument a] (Block a)
     | Method a (Type a) VIdent [Argument a] (Block a)
   deriving (Eq, Ord, Show, Read)
 
 instance Functor ClassElem where
     fmap f x = case x of
         Field a type_ vidents -> Field (f a) (fmap f type_) vidents
+        Constr a arguments block -> Constr (f a) (map (fmap f) arguments) (fmap f block)
         Method a type_ vident arguments block -> Method (f a) (fmap f type_) vident (map (fmap f) arguments) (fmap f block)
 
 
@@ -120,29 +115,6 @@ instance Functor Item where
         NoInit a vident -> NoInit (f a) vident
         Init a vident expr -> Init (f a) vident (fmap f expr)
 
-
--- type
-data Type a
-    = Int a
-    | Bool a
-    | Void a
-    | Class a CIdent
-    | Array a (Type a)
-    | Fun a (Type a) [Type a]
-    | Null a
-  deriving (Eq, Ord, Show, Read)
-
-instance Functor Type where
-    fmap f x = case x of
-        Int a -> Int (f a)
-        Bool a -> Bool (f a)
-        Void a -> Void (f a)
-        Class a cident -> Class (f a) cident
-        Array a type_ -> Array (f a) (fmap f type_)
-        Fun a type_ types -> Fun (f a) (fmap f type_) (map (fmap f) types)
-        Null a -> Null (f a)
-
-
 -- expression
 data Expr a
     = ETypedExpr a (Type a) (Expr a)
@@ -160,7 +132,7 @@ data Expr a
     | ERel a (Expr a) (RelOp a) (Expr a)
     | EAnd a (Expr a) (Expr a)
     | EOr a (Expr a) (Expr a)
-    | EObjNew a CIdent
+    | EObjNew a CIdent [Expr a]
     | EArrNew a (Type a) (Expr a)
     | ELambda a [Argument a] (Stmt a)
   deriving (Eq, Ord, Show, Read)
@@ -182,7 +154,7 @@ instance Functor Expr where
         ERel a expr1 relop expr2 -> ERel (f a) (fmap f expr1) (fmap f relop) (fmap f expr2)
         EAnd a expr1 expr2 -> EAnd (f a) (fmap f expr1) (fmap f expr2)
         EOr a expr1 expr2 -> EOr (f a) (fmap f expr1) (fmap f expr2)
-        EObjNew a cident -> EObjNew (f a) cident
+        EObjNew a cident exprs -> EObjNew (f a) cident (map (fmap f) exprs)
         EArrNew a type_ expr -> EArrNew (f a) (fmap f type_) (fmap f expr)
         ELambda a arguments stmt -> ELambda (f a) (map (fmap f) arguments) (fmap f stmt)
 

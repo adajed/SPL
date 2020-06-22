@@ -70,6 +70,7 @@ TEST_DIRS=(./tests/good/basic
            ./tests/good/array
            ./tests/good/struct
            ./tests/good/lambda
+           ./tests/good/class
            )
 
 BAD_TEST_DIRS=(./tests/bad/basic

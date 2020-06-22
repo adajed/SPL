@@ -4,6 +4,7 @@ import qualified Data.Map as M
 
 import AbsSPL
 import IR
+import Token ( VIdent(..) )
 
 data BasicBlock = BB VIdent [IR]
     deriving (Eq)

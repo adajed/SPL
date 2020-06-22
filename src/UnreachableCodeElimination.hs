@@ -7,6 +7,7 @@ import AbsSPL
 import BasicBlock
 import IR
 import OptimizationUtils
+import Token
 
 unreachableCodeElimination :: VIdent -> BBGraph -> BBGraph
 unreachableCodeElimination fName g = g''

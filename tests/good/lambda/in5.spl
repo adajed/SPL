@@ -2,15 +2,20 @@ class Tree
 {
     int elem;
     Tree left, right;
-}
 
-Tree build(int c, Tree l, Tree r)
-{
-    Tree newt = new Tree;
-    newt.elem = c;
-    newt.left = l;
-    newt.right = r;
-    return newt;
+    constr (int c)
+    {
+        elem = c;
+        left = null;
+        right = null;
+    }
+
+    constr (int c, Tree l, Tree r)
+    {
+        elem = c;
+        left = l;
+        right = r;
+    }
 }
 
 Tree fmap(int(int) f, Tree t)
@@ -18,14 +23,12 @@ Tree fmap(int(int) f, Tree t)
     if (t == null)
         return null;
 
-    return build(f(t.elem), fmap(f, t.left), fmap(f, t.right));
+    return new Tree(f(t.elem), fmap(f, t.left), fmap(f, t.right));
 }
 
 int main()
 {
-    Tree t = build(0,
-                   build(1, null, null),
-                   build(2, null, null));
+    Tree t = new Tree(0, new Tree(1), new Tree(2));
 
     Tree newt = fmap(\int x -> return x * x + 1;, t);
 
