@@ -1,16 +1,16 @@
 int(int) app(int(int) f, int(int) g)
 {
-    return (\int x -> return f(g(x)););
+    return \int x -> f(g(x));
 }
 
 int(int) fun(int s, int e)
 {
     int i = s;
-    int(int) f = \int x -> { return x; } ;
+    int(int) f = \int x -> x;
 
     while (i < e)
     {
-        f = app(\int x -> { return x + i; }, f);
+        f = app(\int x -> x + i, f);
         i++;
     }
     return f;

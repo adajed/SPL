@@ -22,7 +22,7 @@ int main()
         i++;
     }
 
-    fmap(\int k -> return k * k; , arr, n);
+    fmap(\int k -> k * k, arr, n);
 
     i = 0;
     while (i < n)

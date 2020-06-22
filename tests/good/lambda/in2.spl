@@ -12,15 +12,12 @@ int foldl(int(int, int) f, int a, int[] arr, int n)
 
 int sum(int[] arr, int n)
 {
-    int(int, int) f = \int a, int b -> { return a + b; };
-    return foldl(f, 0, arr, n);
+    return foldl(\int a, int b -> a + b, 0, arr, n);
 }
 
 int max(int[] arr, int n)
 {
-    int(int, int) f = \int a, int b -> {
-        if (a > b) { return a; } else { return b; }
-        } ;
+    int(int, int) f = \int a, int b -> if a > b then a else b;
     return foldl(f, 0, arr, n);
 }
 

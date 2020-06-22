@@ -6,7 +6,7 @@ int main()
     int i = 0;
     while (i < n)
     {
-        fs[i] = \int k -> return k + i; ;
+        fs[i] = \int k -> k + i ;
         i++;
     }
 

@@ -155,7 +155,8 @@ resWords = ["!",
             "in",
             "by",
             "extends",
-            "constr"]
+            "constr",
+            "then"]
 
 resWordsMap :: M.Map String Tok
 resWordsMap = M.fromList (map (\(s, i) -> (s, TS s i)) (zip resWords [1..]))

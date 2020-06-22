@@ -30,7 +30,7 @@ int main()
 {
     Tree t = new Tree(0, new Tree(1), new Tree(2));
 
-    Tree newt = fmap(\int x -> return x * x + 1;, t);
+    Tree newt = fmap(\int x -> x * x + 1, t);
 
     printInt(newt.elem);
     printInt(newt.left.elem);

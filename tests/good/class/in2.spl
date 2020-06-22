@@ -100,7 +100,7 @@ class GenPrime extends Gen
     {
         int elem = nat.next();
 
-        nat = new GenFilter(\int n -> return n % elem != 0;, nat);
+        nat = new GenFilter(\int n -> n % elem != 0, nat);
 
         return elem;
     }

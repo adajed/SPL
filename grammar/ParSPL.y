@@ -69,6 +69,7 @@ import Type
   'by' { PT _ (TS _ 52) }
   'extends' { PT _ (TS _ 53) }
   'constr' { PT _ (TS _ 54) }
+  'then' { PT _ (TS _ 55) }
 
 L_integ  { PT _ (TI _) }
 L_CIdent { PT _ (T_CIdent _) }
@@ -370,7 +371,7 @@ Expr
 | 'new' Type '[' Expr ']' {
     (Just (tokenLineCol $1), AbsSPL.EArrNew (Just (tokenLineCol $1)) (snd $2) (snd $4))
 }
-| '\\' ListArgument '->' Stmt {
+| '\\' ListArgument '->' LambdaExpr {
     (Just (tokenLineCol $1), AbsSPL.ELambda (Just (tokenLineCol $1)) (snd $2) (snd $4))
 }
 | Expr1 {
@@ -387,6 +388,18 @@ ListExpr
 }
 | Expr ',' ListExpr {
     (fst $1, (snd $1):(snd $3))
+}
+
+LambdaExpr :: { (Pos, Stmt Pos) }
+LambdaExpr
+: Expr {
+    (fst $1, AbsSPL.Ret (fst $1) (snd $1))
+}
+| 'if' Expr 'then' LambdaExpr 'else' LambdaExpr {
+    (Just (tokenLineCol $1), AbsSPL.CondElse (Just (tokenLineCol $1)) (snd $2) (snd $4) (snd $6))
+}
+| Block {
+    (fst $1, AbsSPL.BStmt (fst $1) (snd $1))
 }
 
 UnaryOp :: { (Pos, UnaryOp Pos) }
