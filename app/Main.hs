@@ -6,8 +6,6 @@ import System.Environment ( getArgs, getProgName )
 import System.Exit ( exitFailure, exitSuccess )
 import System.Process
 
-import Debug.Trace as Trace
-
 import Control.Monad ( liftM, when )
 
 import qualified Data.Map as M
