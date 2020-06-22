@@ -285,8 +285,8 @@ ListType
     (fst $1, (snd $1):(snd $3))
 }
 
-Expr6 :: { (Pos, Expr Pos) }
-Expr6
+Expr7 :: { (Pos, Expr Pos) }
+Expr7
 : 'null' {
     (Just (tokenLineCol $1), AbsSPL.ENull (Just (tokenLineCol $1)))
 }
@@ -302,23 +302,32 @@ Expr6
 | VIdent {
     (fst $1, AbsSPL.EVar (fst $1) (snd $1))
 }
-| Expr6 '.' VIdent {
+| Expr7 '.' VIdent {
     (fst $1, AbsSPL.EField (fst $1) (snd $1) (snd $3))
 }
-| Expr6 '[' Expr ']' {
+| Expr7 '[' Expr ']' {
     (fst $1, AbsSPL.EArrAcc (fst $1) (snd $1) (snd $3))
 }
-| Expr6 '(' ListExpr ')' {
+| Expr7 '(' ListExpr ')' {
     (fst $1, AbsSPL.EApp (fst $1) (snd $1) (snd $3))
 }
 | '(' Expr ')' {
     (Just (tokenLineCol $1), (snd $2))
 }
 
+Expr6 :: { (Pos, Expr Pos) }
+Expr6
+: UnaryOp Expr6 {
+    (fst $1, AbsSPL.EUnaryOp (fst $1) (snd $1) (snd $2))
+}
+| Expr7 {
+    $1
+}
+
 Expr5 :: { (Pos, Expr Pos) }
 Expr5
-: UnaryOp Expr5 {
-    (fst $1, AbsSPL.EUnaryOp (fst $1) (snd $1) (snd $2))
+: Expr5 MulOp Expr6 {
+    (fst $1, AbsSPL.EMul (fst $1) (snd $1) (snd $2) (snd $3))
 }
 | Expr6 {
     $1
@@ -326,8 +335,8 @@ Expr5
 
 Expr4 :: { (Pos, Expr Pos) }
 Expr4
-: Expr4 MulOp Expr5 {
-    (fst $1, AbsSPL.EMul (fst $1) (snd $1) (snd $2) (snd $3))
+: Expr4 AddOp Expr5 {
+    (fst $1, AbsSPL.EAdd (fst $1) (snd $1) (snd $2) (snd $3))
 }
 | Expr5 {
     $1
@@ -335,8 +344,8 @@ Expr4
 
 Expr3 :: { (Pos, Expr Pos) }
 Expr3
-: Expr3 AddOp Expr4 {
-    (fst $1, AbsSPL.EAdd (fst $1) (snd $1) (snd $2) (snd $3))
+: Expr3 RelOp Expr4 {
+    (fst $1, AbsSPL.ERel (fst $1) (snd $1) (snd $2) (snd $3))
 }
 | Expr4 {
     $1
@@ -344,8 +353,8 @@ Expr3
 
 Expr2 :: { (Pos, Expr Pos) }
 Expr2
-: Expr2 RelOp Expr3 {
-    (fst $1, AbsSPL.ERel (fst $1) (snd $1) (snd $2) (snd $3))
+: Expr3 '&&' Expr2 {
+    (fst $1, AbsSPL.EAnd (fst $1) (snd $1) (snd $3))
 }
 | Expr3 {
     $1
@@ -353,8 +362,8 @@ Expr2
 
 Expr1 :: { (Pos, Expr Pos) }
 Expr1
-: Expr2 '&&' Expr1 {
-    (fst $1, AbsSPL.EAnd (fst $1) (snd $1) (snd $3))
+: Expr2 '||' Expr1 {
+    (fst $1, AbsSPL.EOr (fst $1) (snd $1) (snd $3))
 }
 | Expr2 {
     $1
@@ -362,10 +371,7 @@ Expr1
 
 Expr :: { (Pos, Expr Pos) }
 Expr
-: Expr1 '||' Expr {
-    (fst $1, AbsSPL.EOr (fst $1) (snd $1) (snd $3))
-}
-| 'new' CIdent '(' ListExpr ')' {
+: 'new' CIdent '(' ListExpr ')' {
     (Just (tokenLineCol $1), AbsSPL.EObjNew (Just (tokenLineCol $1)) (snd $2) (snd $4))
 }
 | 'new' Type '[' Expr ']' {
