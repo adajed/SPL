@@ -25,6 +25,10 @@ make
   + structs
   + functions (with recursion)
   + lambda expression
+  + loops (while, for, for each)
+  + classes
+  + virtual functions
+  + custom type names (typedef)
 - IR as quadruple code
 - optimizations
   + copy propagation
@@ -44,8 +48,6 @@ TODO:
 - language features
   + basic types (char, float, string)
   + basic IO utils
-  + classes
-  + virtual functions
   + algebraic types
 - optmizations
   + strength reduction
