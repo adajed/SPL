@@ -1,4 +1,5 @@
-class List {
+class List
+{
     int head;
     List tail;
 

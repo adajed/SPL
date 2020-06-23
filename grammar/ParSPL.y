@@ -70,6 +70,7 @@ import Type
   'extends' { PT _ (TS _ 53) }
   'constr' { PT _ (TS _ 54) }
   'then' { PT _ (TS _ 55) }
+  'typedef' { PT _ (TS _ 56) }
 
 L_integ  { PT _ (TI _) }
 L_CIdent { PT _ (T_CIdent _) }
@@ -99,6 +100,9 @@ TopDef :: { (Pos, TopDef Pos) }
 TopDef
 : Type VIdent '(' ListArgument ')' Block {
     (fst $1, AbsSPL.FnDef (fst $1) (snd $1) (snd $2) (snd $4) (snd $6))
+}
+| 'typedef' CIdent '=' Type ';' {
+    (Just (tokenLineCol $1), AbsSPL.TypeDef (Just (tokenLineCol $1)) (snd $2) (snd $4))
 }
 | 'class' CIdent '{' ListClassElem '}' {
     (Just (tokenLineCol $1), AbsSPL.ClassDef (Just (tokenLineCol $1)) (snd $2) (AbsSPL.NoExtends Nothing) (reverse (snd $4)))
@@ -263,7 +267,7 @@ Type
     (Just (tokenLineCol $1), Type.Void (Just (tokenLineCol $1)))
 }
 | CIdent {
-    (fst $1, Type.Class (fst $1) (snd $1))
+    (fst $1, Type.NamedType (fst $1) (snd $1))
 
 }
 | Type '[]' {

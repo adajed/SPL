@@ -1,33 +1,35 @@
-int(int(int, int)) make_pair(int n, int m)
+typedef Pair = int(int(int, int));
+
+Pair make_pair(int n, int m)
 {
     return \int(int, int) f -> f(n, m);
 }
 
-int first(int(int(int, int)) p)
+int first(Pair p)
 {
     return p(\int n, int m -> n);
 }
 
-int second(int(int(int, int)) p)
+int second(Pair p)
 {
     return p(\int n, int m -> m);
 }
 
-int(int(int, int)) swap(int(int(int, int)) p)
+Pair swap(Pair p)
 {
     int n = first(p);
     int m = second(p);
     return \int(int, int) f -> f(m, n);
 }
 
-int(int(int, int)) set_first(int(int(int, int)) p, int e)
+Pair set_first(Pair p, int e)
 {
     int n = e;
     int m = second(p);
     return \int(int, int) f -> f(n, m);
 }
 
-int(int(int, int)) set_second(int(int(int, int)) p, int e)
+Pair set_second(Pair p, int e)
 {
     int n = first(p);
     int m = e;
@@ -36,10 +38,10 @@ int(int(int, int)) set_second(int(int(int, int)) p, int e)
 
 int main()
 {
-    int(int(int, int)) p = make_pair(2, 3);
-    int(int(int, int)) p_swap = swap(p);
-    int(int(int, int)) p_f = set_first(p, 1);
-    int(int(int, int)) p_s = set_second(p, 1);
+    Pair p = make_pair(2, 3);
+    Pair p_swap = swap(p);
+    Pair p_f = set_first(p, 1);
+    Pair p_s = set_second(p, 1);
 
     printInt(first(p));
     printInt(second(p));

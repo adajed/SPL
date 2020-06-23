@@ -63,15 +63,79 @@ staticCheck_Program (Prog _ topdefs) = do
     topdefs' <- mapM staticCheck_TopDef topdefs
     return (Prog voidT topdefs')
 
+declareTopDef :: TopDef Pos -> CheckM ()
+declareTopDef (FnDef pos t name args _) = do
+    t' <- liftM toUnit $ staticCheck_Type t
+    args' <- mapM staticCheck_Argument args
+    let ts' = map getArgType args'
+    declareVar pos name (funT t' ts')
+declareTopDef (ClassDef pos cls (NoExtends _) args) = do
+    (fieldEnv, methodEnv, _, constr') <- foldM addClassElem (M.empty, M.empty, S.empty, S.empty) args
+    let constr = if S.null constr' then S.singleton [] else constr'
+    let info = ClassInfo { fieldTypes = fieldEnv
+                         , methodTypes = methodEnv
+                         , extends = Nothing
+                         , constructors = constr}
+    declareClass pos cls info
+declareTopDef (ClassDef pos cls (Extends pos' superCls) args) = do
+    assertClassNotDeclared pos cls
+    superInfo <- getClassInfo pos' superCls
+    let f = fieldTypes superInfo
+    let m = methodTypes superInfo
+    let acc = (f, m, S.empty, S.empty)
+    (fieldEnv, methodEnv, _, constr') <- foldM addClassElem acc args
+    let constr = if S.null constr' then S.singleton [] else constr'
+    let info = ClassInfo { fieldTypes = fieldEnv
+                         , methodTypes = methodEnv
+                         , extends = Just superCls
+                         , constructors = constr}
+    declareClass pos cls info
+declareTopDef (TypeDef pos name ty) = do
+    t <- liftM toUnit $ staticCheck_Type ty
+    modify (\s -> s { typedefs = M.insert name t (typedefs s) })
+
+addClassElem :: (TypeEnv, TypeEnv, S.Set VIdent, S.Set [T]) -> ClassElem Pos -> CheckM (TypeEnv, TypeEnv, S.Set VIdent, S.Set [T])
+addClassElem (fieldEnv, methodEnv, usedNames, constrs) (Field pos ty names) = do
+    t <- liftM toUnit $ staticCheck_Type ty
+    let m (fEnv, set) name = do
+                             let err = errorMsg pos $ show name ++ " already declared"
+                             when (S.member name set) err
+                             when (M.member name fEnv) err
+                             when (M.member name methodEnv) err
+                             return (M.insert name t fEnv, S.insert name set)
+    (fieldEnv', usedNames') <- foldM m (fieldEnv, usedNames) names
+    return (fieldEnv', methodEnv, usedNames', constrs)
+addClassElem (fieldEnv, methodEnv, usedNames, constrs) (Method pos ty name args _) = do
+    t' <- liftM toUnit $ staticCheck_Type ty
+    args' <- mapM staticCheck_Argument args
+    let ts' = map getArgType args'
+    let t = funT t' ts'
+    let err = errorMsg pos $ show name ++ " already declared"
+    when (S.member name usedNames) err
+    when (M.member name fieldEnv) err
+    when (M.member name methodEnv) (when (t /= methodEnv !!! name) err)
+    let methodEnv' = M.insert name t methodEnv
+    let usedNames' = S.insert name usedNames
+    return (fieldEnv, methodEnv', usedNames', constrs)
+addClassElem (fieldEnv, methodEnv, usedNames, constrs) (Constr pos args _) = do
+    args' <- mapM staticCheck_Argument args
+    let t = map getArgType args'
+    let err = errorMsg pos $ "Redefinition of constructor: " ++ show t
+    g <- gets classGraph
+    let b = any (\t' -> isSubtypeList g t' t || isSubtypeList g t t') (S.toList constrs)
+    when b err
+    let constrs' = S.insert t constrs
+    return (fieldEnv, methodEnv, usedNames, constrs')
+
 staticCheck_TopDef :: TopDef Pos -> CheckM (TopDef T)
 staticCheck_TopDef (FnDef _ t name args (Bl _ stmts)) = doWithSavedEnv m
     where m = do
-            modify (\s -> s { rettype = (toUnit t) })
-            mapM_ declareArg args
+            t' <- staticCheck_Type t
+            args' <- mapM staticCheck_Argument args
+            modify (\s -> s { rettype = toUnit t' })
+            mapM_ declareArg (map (fmap (const Nothing)) args')
             stmts' <- mapM staticCheck_Stmt stmts
-            let t' = toVoid t
-            let args' = fmap toVoid args
-            let stmts'' = stmts' ++ if t' == (toVoid voidT) then [VRet voidT] else []
+            let stmts'' = stmts' ++ if toUnit t' == voidT then [VRet voidT] else []
             return (FnDef voidT t' name args' (Bl voidT stmts''))
 staticCheck_TopDef t@(ClassDef _ cls extends args) = doWithSavedEnv m
     where m = do
@@ -79,30 +143,57 @@ staticCheck_TopDef t@(ClassDef _ cls extends args) = doWithSavedEnv m
             args' <- mapM staticCheck_ClassElem args
             modify (\s -> s { currentClass = Nothing })
             return (ClassDef voidT cls (toVoid extends) args')
+staticCheck_TopDef t@(TypeDef _ _ _) = return (toVoid t)
+
+staticCheck_Argument :: Argument Pos -> CheckM (Argument T)
+staticCheck_Argument (Arg pos t name) = do
+    t' <- staticCheck_Type t
+    return (Arg voidT t' name)
+
+staticCheck_Type :: Type Pos -> CheckM (Type T)
+staticCheck_Type (NamedType pos name) = do
+    m <- gets typedefs
+    case m M.!? name of
+      Nothing -> errorMsg pos $ "Type " ++ show name ++ " not defined"
+      Just t -> return (toVoid t)
+staticCheck_Type (Array pos t) = do
+    t' <- staticCheck_Type t
+    return (Array voidT t')
+staticCheck_Type (Fun pos t ts) = do
+    t' <- staticCheck_Type t
+    ts' <- mapM staticCheck_Type ts
+    return (Fun voidT t' ts')
+staticCheck_Type t = return (toVoid t)
+
 
 staticCheck_ClassElem :: ClassElem Pos -> CheckM (ClassElem T)
-staticCheck_ClassElem e@(Field _ _ _) = return (toVoid e)
+staticCheck_ClassElem (Field _ t names) = do
+    t' <- staticCheck_Type t
+    return (Field voidT t' names)
 staticCheck_ClassElem (Method _ t name args (Bl _ stmts)) = doWithSavedEnv m
     where m = do
-            modify (\s -> s { rettype = (toUnit t) })
-            mapM_ declareArg args
+            t' <- staticCheck_Type t
+            args' <- mapM staticCheck_Argument args
+            modify (\s -> s { rettype = toUnit t' })
+            mapM_ declareArg (map (fmap (const Nothing)) args')
             maybe_cls <- gets currentClass
             let (Just cls) = maybe_cls
             declareArg (Arg Nothing (Class Nothing cls) self)
             stmts' <- mapM staticCheck_Stmt stmts
-            return (Method voidT (toVoid t) name (map toVoid args) (Bl voidT stmts'))
+            return (Method voidT t' name args' (Bl voidT stmts'))
 staticCheck_ClassElem (Constr _ args (Bl _ stmts)) = doWithSavedEnv m
     where m = do
+            args' <- mapM staticCheck_Argument args
             maybe_cls <- gets currentClass
             let (Just cls) = maybe_cls
             let t = classT cls
             modify (\s -> s { rettype = t })
-            mapM_ declareArg args
+            mapM_ declareArg (map (fmap (const Nothing)) args')
             let expr = EVar Nothing self
             let stmts' = map (changeVRet expr) (stmts ++ [VRet Nothing])
             declareArg (Arg Nothing (Class Nothing cls) self)
             stmts'' <- mapM staticCheck_Stmt stmts'
-            return (Constr voidT (map toVoid args) (Bl voidT stmts''))
+            return (Constr voidT args' (Bl voidT stmts''))
 
 changeVRet :: Expr a -> Stmt a -> Stmt a
 changeVRet expr stmt =
@@ -126,8 +217,8 @@ staticCheck_Stmt (BStmt _ (Bl _ stmts)) = doWithSavedEnv m
             stmts' <- mapM staticCheck_Stmt stmts
             return (BStmt voidT (Bl voidT stmts'))
 staticCheck_Stmt (Decl _ t items) = do
-    items' <- mapM (staticCheck_Decl (toUnit t)) items
-    let t' = toVoid t
+    t' <- staticCheck_Type t
+    items' <- mapM (staticCheck_Decl (toUnit t')) items
     return (Decl voidT t' items')
 staticCheck_Stmt (Ass pos e1 e2) = do
     (e1', t1) <- staticCheck_LExpr e1
@@ -248,6 +339,7 @@ staticCheck_Expr (EVar pos name) = do
 staticCheck_Expr (EField pos expr field) = do
     let err = errorMsg pos $ "Field " ++ show field ++ " doesn't exist"
     (expr', t') <- staticCheck_Expr expr
+    let err2 = errorMsg pos $ "Expected object (not " ++ show t' ++ ")"
     case t' of
       Class _ cls -> do
                      info <- getClassInfo pos cls
@@ -259,9 +351,9 @@ staticCheck_Expr (EField pos expr field) = do
                             let t = (methodTypes info) !!! field
                             return (EField t expr' field, t)
       Array _ _ -> do
-                   assert pos (field == VIdent "length") "Expected object"
+                   unless (field == VIdent "length") err2
                    return (EField intT expr' field, intT)
-      _ -> errorMsg pos "Expected object"
+      _ -> err2
 staticCheck_Expr (EArrAcc pos arrExpr indexExpr) = do
     (arrExpr', arrT) <- staticCheck_Expr arrExpr
     (indexExpr', indexT) <- staticCheck_Expr indexExpr
@@ -337,37 +429,44 @@ staticCheck_Expr (EObjNew pos cls exprs) = do
     let t = classT cls
     return (EObjNew t cls exprs', t)
 staticCheck_Expr (EArrNew pos t expr) = do
-    (expr', t') <- staticCheck_Expr expr
-    assertTypesEqual pos intT t'
-    let newt = Array () (toUnit t)
-    return (EArrNew newt (toVoid t) expr', newt)
+    t' <- staticCheck_Type t
+    (expr', tExpr) <- staticCheck_Expr expr
+    assertTypesEqual pos intT tExpr
+    let newt = Array () (toUnit t')
+    return (EArrNew newt t' expr', newt)
 staticCheck_Expr (ELambda pos args stmt) = doWithSavedEnv m
     where m = do
+            args' <- mapM staticCheck_Argument args
             tRetPrev <- gets rettype
-            mapM_ (\(Arg pos' t x) -> declareVar pos' x (toUnit t)) args
-            tOut <- staticCheck_getRetExpr stmt
+            mapM_ (\(Arg _ t x) -> declareVar Nothing x (toUnit t)) args'
+            tOut <- staticCheck_getRetExpr pos stmt
             modify (\s -> s { rettype = tOut })
             stmt' <- staticCheck_Stmt stmt
-            let ts = map (\(Arg _ t _) -> toUnit t) args
+            let ts = map (\(Arg _ t _) -> toUnit t) args'
             let t' = Fun () tOut ts
-            let args' = fmap toVoid args
             modify (\s -> s { rettype = tRetPrev })
             return (ELambda t' args' stmt', t')
 
-staticCheck_getRetExpr :: Stmt Pos -> CheckM T
-staticCheck_getRetExpr stmt = do
+staticCheck_getRetExpr :: Pos -> Stmt Pos -> CheckM T
+staticCheck_getRetExpr pos stmt = do
+    g <- gets classGraph
     ts <- staticCheck_RetType stmt
     case ts of
       [] -> return (Void ())
       (x:xs) -> do
-                mapM_ (assertTypesEqual Nothing x) xs
-                return x
+                let m Nothing t' = Nothing
+                    m (Just t) t' = commonSuperType g t t'
+                    commonT = foldl m (Just x) xs
+                case commonT of
+                  Nothing -> errorMsg pos "Cannot find common type"
+                  Just t -> return t
 
 staticCheck_RetType :: Stmt Pos -> CheckM [T]
 staticCheck_RetType (BStmt _ (Bl _ stmts)) = do
     liftM concat $ mapM staticCheck_RetType stmts
 staticCheck_RetType (Decl _ t items) = do
-    mapM_ (staticCheck_Decl (toUnit t)) items
+    t' <- liftM toUnit $ staticCheck_Type t
+    mapM_ (staticCheck_Decl t') items
     return []
 staticCheck_RetType (Ret _ e) = do
     (_, t) <- staticCheck_Expr e

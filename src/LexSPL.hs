@@ -220,7 +220,8 @@ resWords = ["!",
             "by",
             "extends",
             "constr",
-            "then"]
+            "then",
+            "typedef"]
 
 resWordsMap :: M.Map String Tok
 resWordsMap = M.fromList (map (\(s, i) -> (s, TS s i)) (zip resWords [1..]))

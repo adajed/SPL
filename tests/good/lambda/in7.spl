@@ -1,0 +1,45 @@
+class Expr
+{
+    int eval() { return 0; }
+}
+
+class Const extends Expr
+{
+    int value;
+
+    constr (int v) { value = v; }
+
+    int eval() { return value; }
+}
+
+class BinOp extends Expr
+{
+    Expr left, right;
+
+    int op(int l, int r) { return 0; }
+
+    int eval() { return op(left.eval(), right.eval()); }
+}
+
+class Add extends BinOp
+{
+    constr (Expr l, Expr r) { left = l; right = r; }
+
+    int op(int l, int r) { return l + r; }
+}
+
+int main()
+{
+    Expr(int) f = \int n -> if n == 0
+                                then new Const(42)
+                                else new Add(new Const(n), new Const(n));
+
+    Const(BinOp) g = \Expr e -> new Const(e.eval());
+
+    printInt(f(0).eval());
+    printInt(f(1).eval());
+    printInt(f(10).eval());
+    printInt(g(new Add(new Const(3), new Const(4))).eval());
+
+    return 0;
+}

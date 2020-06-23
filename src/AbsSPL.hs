@@ -16,12 +16,14 @@ instance Functor Program where
 data TopDef a
     = FnDef a (Type a) VIdent [Argument a] (Block a)
     | ClassDef a CIdent (ClassExtends a) [ClassElem a]
+    | TypeDef a CIdent (Type a)
   deriving (Eq, Ord, Show, Read)
 
 instance Functor TopDef where
     fmap f x = case x of
         FnDef a type_ vident arguments block -> FnDef (f a) (fmap f type_) vident (map (fmap f) arguments) (fmap f block)
         ClassDef a cident classextends classelems -> ClassDef (f a) cident (fmap f classextends) (map (fmap f) classelems)
+        TypeDef a cident type_ -> TypeDef (f a) cident (fmap f type_)
 
 
 -- function argument

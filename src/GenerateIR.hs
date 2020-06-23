@@ -88,6 +88,7 @@ generateIR_VTable cls = do
 declare_TopDef :: TopDef T -> GenIR ()
 declare_TopDef (FnDef _ ty name args _) = declareFunction name (toUnit ty) args
 declare_TopDef (ClassDef _ cls extends args) = declareClass cls extends args
+declare_TopDef (TypeDef _ _ _) = return ()
 
 generateIR_lambda :: GenIR ()
 generateIR_lambda = do
@@ -111,6 +112,7 @@ generateIR_TopDef (FnDef _ t name args (Bl _ stmts)) = do
     saveCurrentOutput name
 generateIR_TopDef (ClassDef _ cls _ args) =
     mapM_ (generateIR_ClassElem cls) args
+generateIR_TopDef (TypeDef _ _ _) = return ()
 
 generateIR_ClassElem :: CIdent -> ClassElem T -> GenIR ()
 generateIR_ClassElem cls (Field _ _ _) = return ()

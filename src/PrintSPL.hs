@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-incomplete-patterns #-}
+{-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 module PrintSPL where
 
 import AbsSPL
@@ -86,6 +86,7 @@ instance Print CIdent where
 
 instance Print VIdent where
   prt _ (VIdent i) = doc (showString ( i))
+  prtList _ [] = (concatD [])
   prtList _ [x] = (concatD [prt 0 x])
   prtList _ (x:xs) = (concatD [prt 0 x, doc (showString ","), prt 0 xs])
 
@@ -98,9 +99,18 @@ instance Print (TopDef a) where
   prt i e = case e of
     FnDef _ type_ vident arguments block -> prPrec i 0 (concatD [prt 0 type_, prt 0 vident, doc (showString "("), prt 0 arguments, doc (showString ")"), prt 0 block])
     ClassDef _ cident extends classelems -> prPrec i 0 (concatD [doc (showString "class"),
-                                                            prt 0 cident, doc (showString "{"),
-                                                            prt 0 classelems,
-                                                            doc (showString "}")])
+                                                                 prt 0 cident,
+                                                                 doc (showString "{"),
+                                                                 prt 0 classelems,
+                                                                 doc (showString "}")
+                                                                ])
+    TypeDef _ cident type_ -> prPrec i 0 (concatD [doc (showString "typedef"),
+                                                   prt 0 cident,
+                                                   doc (showString "="),
+                                                   prt 0 type_,
+                                                   doc (showString ";")
+                                                  ])
+  prtList _ [] = (concatD [])
   prtList _ [x] = (concatD [prt 0 x])
   prtList _ (x:xs) = (concatD [prt 0 x, prt 0 xs])
 instance Print (Argument a) where
@@ -184,6 +194,7 @@ instance Print (Item a) where
   prt i e = case e of
     NoInit _ vident -> prPrec i 0 (concatD [prt 0 vident])
     Init _ vident expr -> prPrec i 0 (concatD [prt 0 vident, doc (showString "="), prt 0 expr])
+  prtList _ [] = (concatD [])
   prtList _ [x] = (concatD [prt 0 x])
   prtList _ (x:xs) = (concatD [prt 0 x, doc (showString ","), prt 0 xs])
 instance Print (Type a) where
@@ -195,6 +206,7 @@ instance Print (Type a) where
     Array _ type_ -> prPrec i 0 (concatD [prt 0 type_, doc (showString "[]")])
     Fun _ type_ types -> prPrec i 0 (concatD [prt 0 type_, doc (showString "("), prt 0 types, doc (showString ")")])
     Null _ -> prPrec i 0 (concatD [])
+    NamedType _ cident -> prPrec i 0 (concatD [prt 0 cident])
   prtList _ [] = (concatD [])
   prtList _ [x] = (concatD [prt 0 x])
   prtList _ (x:xs) = (concatD [prt 0 x, doc (showString ","), prt 0 xs])

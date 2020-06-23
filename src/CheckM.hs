@@ -45,6 +45,7 @@ data SState = SState { rettype      :: T
                      , level        :: Level
                      , currentClass :: Maybe CIdent
                      , classGraph   :: M.Map CIdent CIdent
+                     , typedefs :: M.Map CIdent T
                      }
 
 type CheckM a = StateT SState Err a
@@ -62,6 +63,7 @@ runCheckM m = evalStateT m initialSState
                                  , level = 0
                                  , currentClass = Nothing
                                  , classGraph = M.empty
+                                 , typedefs = M.empty
                                  }
 
 assertVariableNotDeclared :: Pos -> VIdent -> CheckM ()
@@ -120,7 +122,7 @@ declareClass pos name info = do
     assertClassNotDeclared pos name
     modify (\s -> s { classEnv = M.insert name info (classEnv s) })
 
-getArgType :: Argument Pos -> T
+getArgType :: Argument a -> T
 getArgType (Arg _ t _) = toUnit t
 
 declareArg :: Argument Pos -> CheckM ()
@@ -132,68 +134,17 @@ buildClassGraph topdefs = do
     let go m (ClassDef _ cls (Extends _ superCls) _) = M.insert cls superCls m
         go m _ = m
     let g = foldl go M.empty topdefs
+    let go2 m (ClassDef _ cls _ _) = M.insert cls (classT cls) m
+        go2 m _ = m
+    let defs = foldl go2 M.empty topdefs
     modify (\s -> s { classGraph = g })
-
-declareTopDef :: TopDef Pos -> CheckM ()
-declareTopDef (FnDef pos t name args _) =
-    declareVar pos name (funT (toUnit t) (map getArgType args))
-declareTopDef (ClassDef pos cls (NoExtends _) args) = do
-    (fieldEnv, methodEnv, _, constr') <- foldM addClassElem (M.empty, M.empty, S.empty, S.empty) args
-    let constr = if S.null constr' then S.singleton [] else constr'
-    let info = ClassInfo { fieldTypes = fieldEnv
-                         , methodTypes = methodEnv
-                         , extends = Nothing
-                         , constructors = constr}
-    declareClass pos cls info
-declareTopDef (ClassDef pos cls (Extends pos' superCls) args) = do
-    assertClassNotDeclared pos cls
-    superInfo <- getClassInfo pos' superCls
-    let f = fieldTypes superInfo
-    let m = methodTypes superInfo
-    let acc = (f, m, S.empty, S.empty)
-    (fieldEnv, methodEnv, _, constr') <- foldM addClassElem acc args
-    let constr = if S.null constr' then S.singleton [] else constr'
-    let info = ClassInfo { fieldTypes = fieldEnv
-                         , methodTypes = methodEnv
-                         , extends = Just superCls
-                         , constructors = constr}
-    declareClass pos cls info
+    modify (\s -> s { typedefs = defs })
 
 (!!!) :: Show a => Ord a => M.Map a b -> a -> b
 m !!! x = case m M.!? x of
             Just y -> y
             Nothing -> error $ "Cannot find " ++ show x
 
-
-
-addClassElem :: (TypeEnv, TypeEnv, S.Set VIdent, S.Set [T]) -> ClassElem Pos -> CheckM (TypeEnv, TypeEnv, S.Set VIdent, S.Set [T])
-addClassElem (fieldEnv, methodEnv, usedNames, constrs) (Field pos ty names) = do
-    let t = toUnit ty
-    let m (fEnv, set) name = do
-                             let err = errorMsg pos $ show name ++ " already declared"
-                             when (S.member name set) err
-                             when (M.member name fEnv) err
-                             when (M.member name methodEnv) err
-                             return (M.insert name t fEnv, S.insert name set)
-    (fieldEnv', usedNames') <- foldM m (fieldEnv, usedNames) names
-    return (fieldEnv', methodEnv, usedNames', constrs)
-addClassElem (fieldEnv, methodEnv, usedNames, constrs) (Method pos ty name args _) = do
-    let t = funT (toUnit ty) (map getArgType args)
-    let err = errorMsg pos $ show name ++ " already declared"
-    when (S.member name usedNames) err
-    when (M.member name fieldEnv) err
-    when (M.member name methodEnv) (when (t /= methodEnv !!! name) err)
-    let methodEnv' = M.insert name t methodEnv
-    let usedNames' = S.insert name usedNames
-    return (fieldEnv, methodEnv', usedNames', constrs)
-addClassElem (fieldEnv, methodEnv, usedNames, constrs) (Constr pos args _) = do
-    let t = map getArgType args
-    let err = errorMsg pos $ "Redefinition of constructor: " ++ show t
-    g <- gets classGraph
-    let b = any (\t' -> isSubtypeList g t' t || isSubtypeList g t t') (S.toList constrs)
-    when b err
-    let constrs' = S.insert t constrs
-    return (fieldEnv, methodEnv, usedNames, constrs')
 
 
 doWithSavedEnv :: CheckM a -> CheckM a
