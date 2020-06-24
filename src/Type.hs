@@ -18,6 +18,7 @@ import Data.List ( intercalate )
 data Type a
     = Int a
     | Bool a
+    | Char a
     | Void a
     | Class a CIdent
     | Array a (Type a)
@@ -29,6 +30,7 @@ data Type a
 instance Show (Type a) where
     show t = case t of
                Int _  -> "int"
+               Char _ -> "char"
                Bool _ -> "bool"
                Void _ -> "void"
                Class _ cls -> "(class)" ++ show cls

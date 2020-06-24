@@ -68,7 +68,7 @@ mkEsc q s = case s of
   _ -> showChar s
 
 prPrec :: Int -> Int -> Doc -> Doc
-prPrec i j = if j<i then parenth else id
+prPrec i j = if j < i then parenth else id
 
 
 instance Print Integer where
@@ -97,7 +97,13 @@ instance Print (Program a) where
 
 instance Print (TopDef a) where
   prt i e = case e of
-    FnDef _ type_ vident arguments block -> prPrec i 0 (concatD [prt 0 type_, prt 0 vident, doc (showString "("), prt 0 arguments, doc (showString ")"), prt 0 block])
+    FnDef _ type_ vident arguments block -> prPrec i 0 (concatD [prt 0 type_,
+                                                                 prt 0 vident,
+                                                                 doc (showString "("),
+                                                                 prt 0 arguments,
+                                                                 doc (showString ")"),
+                                                                 prt 0 block
+                                                                ])
     ClassDef _ cident extends classelems -> prPrec i 0 (concatD [doc (showString "class"),
                                                                  prt 0 cident,
                                                                  doc (showString "{"),
@@ -200,6 +206,7 @@ instance Print (Item a) where
 instance Print (Type a) where
   prt i e = case e of
     Int _ -> prPrec i 0 (concatD [doc (showString "int")])
+    Char _ -> prPrec i 0 (concatD [doc (showString "char")])
     Bool _ -> prPrec i 0 (concatD [doc (showString "bool")])
     Void _ -> prPrec i 0 (concatD [doc (showString "void")])
     Class _ cident -> prPrec i 0 (concatD [prt 0 cident])
@@ -213,6 +220,8 @@ instance Print (Type a) where
 instance Print (Expr a) where
   prt i e = case e of
     ETypedExpr _ type_ expr -> prPrec i 6 (concatD [prt 0 type_, prt 6 expr])
+    EChar _ char -> prPrec i 6 (concatD [doc (showChar char)])
+    EString _ string -> prPrec i 6 (concatD [doc (showString string)])
     ENull _ -> prPrec i 6 (concatD [doc (showString "null")])
     EInt _ n -> prPrec i 6 (concatD [prt 0 n])
     ETrue _ -> prPrec i 6 (concatD [doc (showString "true")])

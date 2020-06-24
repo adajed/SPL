@@ -120,8 +120,10 @@ instance Functor Item where
 -- expression
 data Expr a
     = ETypedExpr a (Type a) (Expr a)
-    | ENull a
     | EInt a Integer
+    | EString a String
+    | EChar a Char
+    | ENull a
     | ETrue a
     | EFalse a
     | EVar a VIdent
@@ -144,6 +146,8 @@ instance Functor Expr where
         ETypedExpr a type_ expr -> ETypedExpr (f a) (fmap f type_) (fmap f expr)
         ENull a -> ENull (f a)
         EInt a integer -> EInt (f a) integer
+        EString a string -> EString (f a) string
+        EChar a char -> EChar (f a) char
         ETrue a -> ETrue (f a)
         EFalse a -> EFalse (f a)
         EVar a vident -> EVar (f a) vident

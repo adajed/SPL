@@ -29,14 +29,10 @@ $u = [\0-\255]          -- universal: any character
 "/*" ([$u # \*] | \*+ [$u # [\* \/]])* ("*")+ "/" ;
 
 $white+ ;
-@rsyms { tok (\p s -> PT p (eitherResIdent (TV . share) s)) }
-$c ($l | $d | \_)* { tok (\p s -> PT p (eitherResIdent (T_CIdent . share) s)) }
-$s ($l | $d | \_)* { tok (\p s -> PT p (eitherResIdent (T_VIdent . share) s)) }
-
-$l $i*   { tok (\p s -> PT p (eitherResIdent (TV . share) s)) }
-
-
-$d+      { tok (\p s -> PT p (TI $ share s))    }
+@rsyms              { tok (\p s -> PT p (eitherResIdent (T_VIdent . share) s)) }
+$c ($l | $d | \_)*  { tok (\p s -> PT p (eitherResIdent (T_CIdent . share) s)) }
+$s ($l | $d | \_)*  { tok (\p s -> PT p (eitherResIdent (T_VIdent . share) s)) }
+$d+                 { tok (\p s -> PT p (T_Int $ share s))    }
 
 
 {
@@ -49,15 +45,13 @@ tok f p s = f p s
 share :: String -> String
 share = id
 
-data Tok =
-   TS !String !Int    -- reserved words and symbols
- | TL !String         -- string literals
- | TI !String         -- integer literals
- | TV !String         -- identifiers
- | TD !String         -- double precision float literals
- | TC !String         -- character literals
- | T_CIdent !String
- | T_VIdent !String
+data Tok = T_Keyword !String !Int   -- reserved words and symbols
+         | T_String !String         -- string literals
+         | T_Int !String            -- integer literals
+         | T_Double !String         -- double precision float literals
+         | T_Char !String           -- character literals
+         | T_CIdent !String         -- class identifier
+         | T_VIdent !String         -- variable identifier
 
  deriving (Eq,Show,Ord)
 
@@ -86,14 +80,13 @@ mkPosToken t@(PT p _) = (posLineCol p, prToken t)
 
 prToken :: Token -> String
 prToken t = case t of
-  PT _ (TS s _) -> s
-  PT _ (TL s)   -> show s
-  PT _ (TI s)   -> s
-  PT _ (TV s)   -> s
-  PT _ (TD s)   -> s
-  PT _ (TC s)   -> s
-  PT _ (T_CIdent s) -> s
-  PT _ (T_VIdent s) -> s
+  PT _ (T_Keyword s _) -> s
+  PT _ (T_String s)    -> s
+  PT _ (T_Int s)       -> s
+  PT _ (T_Double s)    -> s
+  PT _ (T_Char s)      -> s
+  PT _ (T_CIdent s)    -> s
+  PT _ (T_VIdent s)    -> s
 
 
 eitherResIdent :: (String -> Tok) -> String -> Tok
@@ -102,65 +95,17 @@ eitherResIdent tv s = case resWordsMap M.!? s of
                         Just t -> t
 
 resWords :: [String]
-resWords = ["!",
-            "!=",
-            "%",
-            "&",
-            "&&",
-            "(",
-            ")",
-            "*" ,
-            "+",
-            "++",
-            ",",
-            "-",
-            "--",
-            "->",
-            ".",
-            "/",
-            ";",
-            "<",
-            "<<",
-            "<=",
-            "=",
-            "==",
-            ">",
-            ">=",
-            ">>",
-            "[",
-            "[]",
-            "\\",
-            "]",
-            "^",
-            "bool",
-            "class",
-            "else",
-            "false",
-            "if",
-            "int",
-            "new",
-            "null",
-            "return" ,
-            "true",
-            "void",
-            "while",
-            "{",
-            "|",
-            "||",
-            "}",
-            "~",
-            "for",
-            "to",
-            "down",
-            "in",
-            "by",
-            "extends",
-            "constr",
-            "then",
-            "typedef"]
+resWords = ["!", "!=", "%", "&", "&&", "(", ")", "*" , "+", "++",
+            ",", "-", "--", "->", ".", "/", ";", "<", "<<", "<=",
+            "=", "==", ">", ">=", ">>", "[", "[]", "\\", "]", "^",
+            "bool", "class", "else", "false", "if", "int", "new",
+            "null", "return" , "true", "void", "while", "{", "|",
+            "||", "}", "~", "for", "to", "down", "in", "by",
+            "extends", "constr", "then", "typedef", "char", "string",
+            "real"]
 
 resWordsMap :: M.Map String Tok
-resWordsMap = M.fromList (map (\(s, i) -> (s, TS s i)) (zip resWords [1..]))
+resWordsMap = M.fromList (map (\(s, i) -> (s, T_Keyword s i)) (zip resWords [1..]))
 
 unescapeInitTail :: String -> String
 unescapeInitTail = id . unesc . tail . id where
