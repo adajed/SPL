@@ -5,6 +5,7 @@ import Data.Map as Map
 
 import BasicBlock
 import IR
+import Operator
 import OptimizationUtils
 
 constantFolding :: BBGraph -> BBGraph
@@ -15,7 +16,7 @@ constantFold (IR_BinOp op x (IntIR n1 s1) (IntIR n2 s2)) =
     IR_Ass x (IntIR (calcBinOp op n1 n2) (max s1 s2))
 constantFold (IR_UnOp op x (IntIR n s)) =
     IR_Ass x (IntIR (calcUnOp op n) s)
-constantFold ir@(IR_CondJump v1 EQU v2 label) = if v1 == v2 then IR_Jump label else ir
+constantFold ir@(IR_CondJump v1 Equal v2 label) = if v1 == v2 then IR_Jump label else ir
 constantFold (IR_CondJump (IntIR n1 _) op (IntIR n2 _) label) =
     if calcIRelOp op n1 n2 then IR_Jump label else IR_Nop
 constantFold ir = ir
@@ -47,10 +48,10 @@ calcUnOp INeg n    = negate n
 calcUnOp IBitNot n = Bits.complement n
 calcUnOp BNot n    = boolToInt (not (intToBool n))
 
-calcIRelOp :: RelOp -> Int -> Int -> Bool
-calcIRelOp LTH = (<)
-calcIRelOp LEQ = (<=)
-calcIRelOp GTH = (>)
-calcIRelOp GEQ = (>=)
-calcIRelOp EQU = (==)
-calcIRelOp NEQ = (/=)
+calcIRelOp :: Operator -> Int -> Int -> Bool
+calcIRelOp Less = (<)
+calcIRelOp LessEq = (<=)
+calcIRelOp Greater = (>)
+calcIRelOp GreaterEq = (>=)
+calcIRelOp Equal = (==)
+calcIRelOp NotEqual = (/=)

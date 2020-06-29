@@ -6,6 +6,7 @@ import ErrM
 import GenIR
 import IR
 import Utils
+import Operator
 import Token
 import Type
 
@@ -14,6 +15,7 @@ import FreeVariables ( getFreeVars, substitute )
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.List as L
+import Data.Char ( ord )
 
 import Control.Monad ( liftM, foldM, when, unless, void )
 import Control.Monad.Trans ( lift )
@@ -81,7 +83,7 @@ generateIR_VTable cls = do
     let entries' = map (\m -> f ((attrs info) !!! m)) methods
     let entries = L.sortBy (\x y -> compare (fst x) (fst y)) entries'
     let lName = vtableName cls
-    let ir = map (\(_, name) -> IR_DataQ (LabelIR name)) entries
+    let ir = map (\(_, name) -> IR_DataVal (LabelIR name) 8) entries
     modify (\s -> s { output = (output s) { dataSection = M.insert lName ir (dataSection (output s)) } })
 
 
@@ -163,15 +165,15 @@ releaseObject t@(Class _ cls) x =
        then return ()
        else do
                l <- getFreshLabel
-               emitIR (IR_CondJump x IR.EQU (IntIR 0 8) l)
+               emitIR (IR_CondJump x Equal (IntIR 0 8) l)
                f <- getField x 12 8
                emitIR (IR_VoidCall f [x])
                emitIR (IR_Label l)
 releaseObject t@(Array _ ty) x = do
     l <- getFreshLabel
-    emitIR (IR_CondJump x IR.EQU (IntIR 0 8) l)
+    emitIR (IR_CondJump x Equal (IntIR 0 8) l)
     refcnt <- decreaseRefCount x
-    emitIR (IR_CondJump refcnt IR.NEQ (IntIR 0 4) l)
+    emitIR (IR_CondJump refcnt NotEqual (IntIR 0 4) l)
     when (isFreeable ty) (do
             arr <- add x (IntIR 8 8) 8
             size <- memread 4 =<< add x (IntIR 4 8) 8
@@ -187,15 +189,15 @@ releaseObject t@(Array _ ty) x = do
             i' <- add (VarIR i) (IntIR 1 4) 4
             emitIR (IR_Ass i i')
             emitIR (IR_Label l2)
-            emitIR (IR_CondJump (VarIR i) IR.LTH size l1)
+            emitIR (IR_CondJump (VarIR i) Less size l1)
                          )
     emitIR (IR_VoidCall (LabelIR (VIdent "freeMemory")) [x])
     emitIR (IR_Label l)
 releaseObject t@(Fun _ _ _) x = do
     l <- getFreshLabel
-    emitIR (IR_CondJump x IR.EQU (IntIR 0 8) l)
+    emitIR (IR_CondJump x Equal (IntIR 0 8) l)
     refcnt <- decreaseRefCount x
-    emitIR (IR_CondJump refcnt IR.NEQ (IntIR 0 4) l)
+    emitIR (IR_CondJump refcnt NotEqual (IntIR 0 4) l)
     f <- memread 8 =<< add x (IntIR 20 8) 8
     c <- memread 8 =<< add x (IntIR 12 8) 8
     emitIR (IR_VoidCall f [c])
@@ -208,7 +210,7 @@ acquireObject (Bool ()) _ = return ()
 acquireObject (Null ()) _ = return ()
 acquireObject t x = do
     l <- getFreshLabel
-    emitIR (IR_CondJump x IR.EQU (IntIR 0 8) l)
+    emitIR (IR_CondJump x Equal (IntIR 0 8) l)
     cnt <- memread 4 x
     newcnt <- add cnt (IntIR 1 4) 4
     emitIR (IR_MemSave x newcnt 4)
@@ -220,7 +222,7 @@ decrementRefCount (Bool ()) _ = return ()
 decrementRefCount (Null ()) _ = return ()
 decrementRefCount t x = do
     l <- getFreshLabel
-    emitIR (IR_CondJump x IR.EQU (IntIR 0 8) l)
+    emitIR (IR_CondJump x Equal (IntIR 0 8) l)
     decreaseRefCount x
     emitIR (IR_Label l)
 
@@ -236,7 +238,7 @@ generateIR_Destructor cls = do
     let x = VarIR var
     emitIR (IR_Argument var)
     l <- getFreshLabel
-    emitIR (IR_CondJump x IR.NEQ (IntIR 0 8) l)
+    emitIR (IR_CondJump x NotEqual (IntIR 0 8) l)
     emitIR IR_VoidReturn
     emitIR (IR_Label l)
     unless (isLambdaEnv cls)
@@ -245,7 +247,7 @@ generateIR_Destructor cls = do
          newcnt <- sub cnt (IntIR 1 4) 4
          emitIR (IR_MemSave x newcnt 4)
          l <- getFreshLabel
-         emitIR (IR_CondJump newcnt IR.EQU (IntIR 0 4) l)
+         emitIR (IR_CondJump newcnt Equal (IntIR 0 4) l)
          emitIR IR_VoidReturn
          emitIR (IR_Label l)
         )
@@ -374,7 +376,7 @@ generateIR_Stmt (ForUp _ name exprS exprE exprI stmt) = do
     emitIR (IR_Ass i temp)
     void popEnv
     emitIR (IR_Label lEnd)
-    emitIR (IR_CondJump (VarIR i) IR.LTH valE lLoop)
+    emitIR (IR_CondJump (VarIR i) Less valE lLoop)
 generateIR_Stmt (ForDown _ name exprS exprE exprI stmt) = do
     lLoop <- getFreshLabel
     lEnd <- getFreshLabel
@@ -391,7 +393,7 @@ generateIR_Stmt (ForDown _ name exprS exprE exprI stmt) = do
     emitIR (IR_Ass i temp)
     void popEnv
     emitIR (IR_Label lEnd)
-    emitIR (IR_CondJump (VarIR i) IR.GTH valE lLoop)
+    emitIR (IR_CondJump (VarIR i) Greater valE lLoop)
 generateIR_Stmt (ForEach _ name expr stmt) = do
     lLoop <- getFreshLabel
     lEnd <- getFreshLabel
@@ -412,7 +414,7 @@ generateIR_Stmt (ForEach _ name expr stmt) = do
     emitIR (IR_Ass i temp)
     void popEnv
     emitIR (IR_Label lEnd)
-    emitIR (IR_CondJump (VarIR i) IR.LTH size lLoop)
+    emitIR (IR_CondJump (VarIR i) Less size lLoop)
 generateIR_Stmt (SExp _ expr) = do
     value <- generateIR_Expr expr
     return ()
@@ -428,22 +430,15 @@ generateIR_Decl t (Init _ name expr) = do
     emitIR (IR_Ass var temp)
 
 
-relop :: AbsSPL.RelOp a -> IR.RelOp
-relop op = case op of
-              AbsSPL.LTH _ -> IR.LTH
-              AbsSPL.LE _  -> IR.LEQ
-              AbsSPL.GTH _ -> IR.GTH
-              AbsSPL.GE _  -> IR.GEQ
-              AbsSPL.EQU _ -> IR.EQU
-              AbsSPL.NE _  -> IR.NEQ
-
-
 generateIR_Expr :: Expr T -> GenIR ValIR
 generateIR_Expr (ETypedExpr _ _ expr) = generateIR_Expr expr
 generateIR_Expr (EInt _ n) = return (IntIR (fromInteger n) 4)
 generateIR_Expr (ETrue _) = return (IntIR 1 1)
 generateIR_Expr (EFalse _) = return (IntIR 0 1)
 generateIR_Expr (ENull _) = return (IntIR 0 8)
+generateIR_Expr (EChar _ c) = return (IntIR (ord c) 1)
+generateIR_Expr (EString _ str) = generateIR_Expr expr
+    where expr = EArray (arrayT charT) (map (EChar charT) (escape str))
 generateIR_Expr (EVar _ name) = liftM VarIR $ getVar name
 generateIR_Expr (EField _ expr field) =
     case exprType expr of
@@ -487,28 +482,31 @@ generateIR_Expr (EApp ty fExpr args) = do
     mapM_ (uncurry acquireObject) (zip (map exprType args) xs)
     f <- generateIR_AppExpr fExpr ty
     f xs
-generateIR_Expr (EUnaryOp _ op expr) = generateIR_UnOp op' expr
-    where op' = case op of
-                  Neg _    -> INeg
-                  Not _    -> BNot
-                  BitNot _ -> IBitNot
-generateIR_Expr (EMul _ expr1 op expr2) = generateIR_BinOp op' expr1 expr2
-    where op' = case op of
-                  Times _  -> IMul
-                  Div _    -> IDiv
-                  Mod _    -> IMod
-                  LShift _ -> ILshift
-                  RShift _ -> IRshift
-                  BitAnd _ -> IBitAnd
-                  BitOr _  -> IBitOr
-                  BitXor _ -> IBitXor
-generateIR_Expr (EAdd _ expr1 op expr2) = generateIR_BinOp op' expr1 expr2
-    where op' = case op of
-                  Plus _  -> IAdd
-                  Minus _ -> ISub
-generateIR_Expr e@(ERel _ _ _ _) = generateIR_BoolExpr e
-generateIR_Expr e@(EAnd _ _ _) = generateIR_BoolExpr e
-generateIR_Expr e@(EOr _ _ _) = generateIR_BoolExpr e
+generateIR_Expr (EUnaryOp _ op expr) =
+    case op of
+      Neg       -> generateIR_UnOp INeg expr
+      Not       -> generateIR_UnOp BNot expr
+      BitNot    -> generateIR_UnOp IBitNot expr
+generateIR_Expr e@(EBinOp _ expr1 op expr2) =
+    case op of
+      Times     -> generateIR_BinOp IMul expr1 expr2
+      Div       -> generateIR_BinOp IDiv expr1 expr2
+      Mod       -> generateIR_BinOp IMod expr1 expr2
+      LShift    -> generateIR_BinOp ILshift expr1 expr2
+      RShift    -> generateIR_BinOp IRshift expr1 expr2
+      BitAnd    -> generateIR_BinOp IBitAnd expr1 expr2
+      BitOr     -> generateIR_BinOp IBitOr expr1 expr2
+      BitXor    -> generateIR_BinOp IBitXor expr1 expr2
+      Plus      -> generateIR_BinOp IAdd expr1 expr2
+      Minus     -> generateIR_BinOp ISub expr1 expr2
+      Less      -> generateIR_BoolExpr e
+      LessEq    -> generateIR_BoolExpr e
+      Greater   -> generateIR_BoolExpr e
+      GreaterEq -> generateIR_BoolExpr e
+      Equal     -> generateIR_BoolExpr e
+      NotEqual  -> generateIR_BoolExpr e
+      And       -> generateIR_BoolExpr e
+      Or        -> generateIR_BoolExpr e
 generateIR_Expr (EObjNew t cls exprs) = do
     let t = map exprType exprs
     constrs <- liftM (constructors . (M.! cls)) $ gets classInfo
@@ -539,7 +537,7 @@ generateIR_Expr (EArrNew tt t expr) = do
     i' <- add (VarIR i) (IntIR 1 4) 4
     emitIR (IR_Ass i i')
     emitIR (IR_Label lEnd)
-    emitIR (IR_CondJump (VarIR i) IR.LTH v1 lLoop)
+    emitIR (IR_CondJump (VarIR i) Less v1 lLoop)
     return ptr
 generateIR_Expr e@(ELambda ty args stmt) = do
     lambdaN <- gets lambdaCounter
@@ -574,6 +572,20 @@ generateIR_Expr e@(ELambda ty args stmt) = do
     let envArg = Arg (Void ()) envType env
     addLambda tOut lambdaName (args ++ [envArg]) stmt'
     return v
+generateIR_Expr (EArray ty exprs) = do
+    let size = 8 + sum (map (sizeOf . exprType) exprs)
+    let f = LabelIR (VIdent "allocMemory")
+    ptr <- call f [IntIR size 4] 8
+    setField ptr (IntIR 0 4) 0 4
+    setField ptr (IntIR (length exprs) 4) 4 4
+    let m offset expr = do
+                        let s = sizeOf (exprType expr)
+                        x <- generateIR_Expr expr
+                        setField ptr x offset s
+                        return (offset + s)
+    foldM m 8 exprs
+    return ptr
+
 
 setupEnv :: ClassInfo -> ValIR -> VIdent -> GenIR ()
 setupEnv info v x = do
@@ -657,23 +669,23 @@ generateIR_AppExpr fExpr ty = do
            )
 
 generateIR_JumpExpr :: Expr T -> VIdent -> VIdent -> GenIR ()
-generateIR_JumpExpr (ERel _ e1 op e2) lTrue lFalse = do
-    v1 <- generateIR_Expr e1
-    v2 <- generateIR_Expr e2
-    emitIR (IR_CondJump v1 (relop op) v2 lTrue)
-    emitIR (IR_Jump lFalse)
-generateIR_JumpExpr (EAnd _ e1 e2) lTrue lFalse = do
+generateIR_JumpExpr (EBinOp _ e1 And e2) lTrue lFalse = do
     lFresh <- getFreshLabel
     generateIR_JumpExpr e1 lFresh lFalse
     emitIR (IR_Label lFresh)
     generateIR_JumpExpr e2 lTrue lFalse
-generateIR_JumpExpr (EOr _ e1 e2) lTrue lFalse = do
+generateIR_JumpExpr (EBinOp _ e1 Or e2) lTrue lFalse = do
     lFresh <- getFreshLabel
     generateIR_JumpExpr e1 lTrue lFresh
     emitIR (IR_Label lFresh)
     generateIR_JumpExpr e2 lTrue lFalse
+generateIR_JumpExpr (EBinOp _ e1 op e2) lTrue lFalse = do
+    v1 <- generateIR_Expr e1
+    v2 <- generateIR_Expr e2
+    emitIR (IR_CondJump v1 op v2 lTrue)
+    emitIR (IR_Jump lFalse)
 generateIR_JumpExpr expr lTrue lFalse = generateIR_JumpExpr expr' lTrue lFalse
-    where expr' = ERel (Bool ()) expr (AbsSPL.EQU (Void ())) (ETrue (Bool ()))
+    where expr' = EBinOp boolT expr Equal (ETrue boolT)
 
 generateIR_BoolExpr :: Expr T -> GenIR ValIR
 generateIR_BoolExpr expr = do
@@ -696,17 +708,24 @@ exprType (ENull t) = t
 exprType (EInt t _) = t
 exprType (ETrue t) = t
 exprType (EFalse t) = t
+exprType (EString t _) = t
+exprType (EChar t _) = t
 exprType (EVar t _) = t
 exprType (EField t _ _) = t
 exprType (EArrAcc t _ _) = t
 exprType (EApp t _ _) = t
 exprType (EUnaryOp t _ _) = t
-exprType (EMul t _ _ _) = t
-exprType (EAdd t _ _ _) = t
-exprType (ERel t _ _ _) = t
-exprType (EAnd t _ _) = t
-exprType (EOr t _ _) = t
+exprType (EBinOp t _ _ _) = t
 exprType (EObjNew t _ _) = t
 exprType (EArrNew t _ _) = t
 exprType (ELambda t _ _) = t
+exprType (EArray t _) = t
 
+escape :: String -> String
+escape str = go str []
+    where go [] acc = reverse acc
+          go ('\\':'n':xs) acc = go xs ('\n':acc)
+          go ('\\':'\"':xs) acc = go xs ('\"':acc)
+          go ('\\':'\'':xs) acc = go xs ('\'':acc)
+          go ('\\':'\\':xs) acc = go xs ('\\':acc)
+          go (x:xs) acc = go xs (x:acc)

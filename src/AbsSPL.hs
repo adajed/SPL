@@ -1,5 +1,6 @@
 module AbsSPL where
 
+import Operator
 import Token
 import Type
 
@@ -130,15 +131,12 @@ data Expr a
     | EField a (Expr a) VIdent
     | EArrAcc a (Expr a) (Expr a)
     | EApp a (Expr a) [Expr a]
-    | EUnaryOp a (UnaryOp a) (Expr a)
-    | EMul a (Expr a) (MulOp a) (Expr a)
-    | EAdd a (Expr a) (AddOp a) (Expr a)
-    | ERel a (Expr a) (RelOp a) (Expr a)
-    | EAnd a (Expr a) (Expr a)
-    | EOr a (Expr a) (Expr a)
+    | EUnaryOp a Operator (Expr a)
+    | EBinOp a (Expr a) Operator (Expr a)
     | EObjNew a CIdent [Expr a]
     | EArrNew a (Type a) (Expr a)
     | ELambda a [Argument a] (Stmt a)
+    | EArray a [Expr a]
   deriving (Eq, Ord, Show, Read)
 
 instance Functor Expr where
@@ -154,73 +152,11 @@ instance Functor Expr where
         EField a expr vident -> EField (f a) (fmap f expr) vident
         EArrAcc a expr1 expr2 -> EArrAcc (f a) (fmap f expr1) (fmap f expr2)
         EApp a expr exprs -> EApp (f a) (fmap f expr) (map (fmap f) exprs)
-        EUnaryOp a unaryop expr -> EUnaryOp (f a) (fmap f unaryop) (fmap f expr)
-        EMul a expr1 mulop expr2 -> EMul (f a) (fmap f expr1) (fmap f mulop) (fmap f expr2)
-        EAdd a expr1 addop expr2 -> EAdd (f a) (fmap f expr1) (fmap f addop) (fmap f expr2)
-        ERel a expr1 relop expr2 -> ERel (f a) (fmap f expr1) (fmap f relop) (fmap f expr2)
-        EAnd a expr1 expr2 -> EAnd (f a) (fmap f expr1) (fmap f expr2)
-        EOr a expr1 expr2 -> EOr (f a) (fmap f expr1) (fmap f expr2)
+        EUnaryOp a op expr -> EUnaryOp (f a) op (fmap f expr)
+        EBinOp a expr1 op expr2 -> EBinOp (f a) (fmap f expr1) op (fmap f expr2)
         EObjNew a cident exprs -> EObjNew (f a) cident (map (fmap f) exprs)
         EArrNew a type_ expr -> EArrNew (f a) (fmap f type_) (fmap f expr)
         ELambda a arguments stmt -> ELambda (f a) (map (fmap f) arguments) (fmap f stmt)
+        EArray a exprs -> EArray (f a) (map (fmap f) exprs)
 
 
--- unary op
-data UnaryOp a = Neg a | Not a | BitNot a
-  deriving (Eq, Ord, Show, Read)
-
-
-instance Functor UnaryOp where
-    fmap f x = case x of
-        Neg a -> Neg (f a)
-        Not a -> Not (f a)
-        BitNot a -> BitNot (f a)
-
-
--- add/minus
-data AddOp a = Plus a | Minus a
-  deriving (Eq, Ord, Show, Read)
-
-instance Functor AddOp where
-    fmap f x = case x of
-        Plus a -> Plus (f a)
-        Minus a -> Minus (f a)
-
-
--- multiplication op
-data MulOp a
-    = Times a
-    | Div a
-    | Mod a
-    | LShift a
-    | RShift a
-    | BitAnd a
-    | BitOr a
-    | BitXor a
-  deriving (Eq, Ord, Show, Read)
-
-instance Functor MulOp where
-    fmap f x = case x of
-        Times a -> Times (f a)
-        Div a -> Div (f a)
-        Mod a -> Mod (f a)
-        LShift a -> LShift (f a)
-        RShift a -> RShift (f a)
-        BitAnd a -> BitAnd (f a)
-        BitOr a -> BitOr (f a)
-        BitXor a -> BitXor (f a)
-
-
-
--- relation op
-data RelOp a = LTH a | LE a | GTH a | GE a | EQU a | NE a
-  deriving (Eq, Ord, Show, Read)
-
-instance Functor RelOp where
-    fmap f x = case x of
-        LTH a -> LTH (f a)
-        LE a -> LE (f a)
-        GTH a -> GTH (f a)
-        GE a -> GE (f a)
-        EQU a -> EQU (f a)
-        NE a -> NE (f a)

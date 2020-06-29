@@ -5,8 +5,8 @@ all: lib/runtime.o spl
 
 .PHONY: clean
 
-lib/runtime.o: lib/runtime.c
-	gcc -c -o lib/runtime.o lib/runtime.c
+lib/runtime.o: lib/runtime.asm
+	nasm -felf64 -o lib/runtime.o lib/runtime.asm
 
 spl: $(SRC)
 	stack build

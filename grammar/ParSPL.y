@@ -5,6 +5,7 @@ module ParSPL where
 import AbsSPL
 import LexSPL
 import ErrM
+import Operator
 import Token
 import Type
 
@@ -74,6 +75,8 @@ import Type
   'char'    { PT _ (T_Keyword _ 57) }
   'string'  { PT _ (T_Keyword _ 58) }
   'real'    { PT _ (T_Keyword _ 59) }
+  'or'      { PT _ (T_Keyword _ 60) }
+  'and'     { PT _ (T_Keyword _ 61) }
 
 L_integ  { PT _ (T_Int _) }
 L_CIdent { PT _ (T_CIdent _) }
@@ -130,7 +133,7 @@ TopDef
 ListTopDef :: { (Pos, [TopDef Pos]) }
 ListTopDef
 : TopDef {
-    (fst $1, (:[]) (snd $1))
+    (fst $1, [snd $1])
 }
 | TopDef ListTopDef {
     (fst $1, ((:) (snd $1) (snd $2)))
@@ -348,8 +351,14 @@ Expr7
 
 Expr6 :: { (Pos, Expr Pos) }
 Expr6
-: UnaryOp Expr6 {
-    (fst $1, AbsSPL.EUnaryOp (fst $1) (snd $1) (snd $2))
+: '-' Expr6 {
+    (Just (tokenLineCol $1), AbsSPL.EUnaryOp (Just (tokenLineCol $1)) Neg (snd $2))
+}
+| '!' Expr6 {
+    (Just (tokenLineCol $1), AbsSPL.EUnaryOp (Just (tokenLineCol $1)) Not (snd $2))
+}
+| '~' Expr6 {
+    (Just (tokenLineCol $1), AbsSPL.EUnaryOp (Just (tokenLineCol $1)) BitNot (snd $2))
 }
 | Expr7 {
     $1
@@ -357,8 +366,29 @@ Expr6
 
 Expr5 :: { (Pos, Expr Pos) }
 Expr5
-: Expr5 MulOp Expr6 {
-    (fst $1, AbsSPL.EMul (fst $1) (snd $1) (snd $2) (snd $3))
+: Expr5 '*' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Times (snd $3))
+}
+| Expr5 '/' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Div (snd $3))
+}
+| Expr5 '%' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Mod (snd $3))
+}
+| Expr5 '<<' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) LShift (snd $3))
+}
+| Expr5 '>>' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) RShift (snd $3))
+}
+| Expr5 '&' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) BitAnd (snd $3))
+}
+| Expr5 '|' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) BitOr (snd $3))
+}
+| Expr5 '^' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) BitXor (snd $3))
 }
 | Expr6 {
     $1
@@ -366,8 +396,11 @@ Expr5
 
 Expr4 :: { (Pos, Expr Pos) }
 Expr4
-: Expr4 AddOp Expr5 {
-    (fst $1, AbsSPL.EAdd (fst $1) (snd $1) (snd $2) (snd $3))
+: Expr4 '+' Expr5 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Plus (snd $3))
+}
+| Expr4 '-' Expr5 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Minus (snd $3))
 }
 | Expr5 {
     $1
@@ -375,8 +408,23 @@ Expr4
 
 Expr3 :: { (Pos, Expr Pos) }
 Expr3
-: Expr3 RelOp Expr4 {
-    (fst $1, AbsSPL.ERel (fst $1) (snd $1) (snd $2) (snd $3))
+: Expr3 '<' Expr4 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Less (snd $3))
+}
+| Expr3 '<=' Expr4 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) LessEq (snd $3))
+}
+| Expr3 '>' Expr4 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Greater (snd $3))
+}
+| Expr3 '>=' Expr4 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) GreaterEq (snd $3))
+}
+| Expr3 '==' Expr4 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Equal (snd $3))
+}
+| Expr3 '!=' Expr4 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) NotEqual (snd $3))
 }
 | Expr4 {
     $1
@@ -385,7 +433,10 @@ Expr3
 Expr2 :: { (Pos, Expr Pos) }
 Expr2
 : Expr3 '&&' Expr2 {
-    (fst $1, AbsSPL.EAnd (fst $1) (snd $1) (snd $3))
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) And (snd $3))
+}
+| Expr3 'and' Expr2 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) And (snd $3))
 }
 | Expr3 {
     $1
@@ -394,7 +445,10 @@ Expr2
 Expr1 :: { (Pos, Expr Pos) }
 Expr1
 : Expr2 '||' Expr1 {
-    (fst $1, AbsSPL.EOr (fst $1) (snd $1) (snd $3))
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Or (snd $3))
+}
+| Expr2 'or' Expr1 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Or (snd $3))
 }
 | Expr2 {
     $1
@@ -410,6 +464,9 @@ Expr
 }
 | '\\' ListArgument '->' LambdaExpr {
     (Just (tokenLineCol $1), AbsSPL.ELambda (Just (tokenLineCol $1)) (snd $2) (snd $4))
+}
+| '[' ListExpr ']' {
+    (Just (tokenLineCol $1), AbsSPL.EArray (Just (tokenLineCol $1)) (snd $2))
 }
 | Expr1 {
     $1
@@ -437,75 +494,6 @@ LambdaExpr
 }
 | Block {
     (fst $1, AbsSPL.BStmt (fst $1) (snd $1))
-}
-
-UnaryOp :: { (Pos, UnaryOp Pos) }
-UnaryOp
-: '-' {
-    (Just (tokenLineCol $1), AbsSPL.Neg (Just (tokenLineCol $1)))
-}
-| '!' {
-    (Just (tokenLineCol $1), AbsSPL.Not (Just (tokenLineCol $1)))
-}
-| '~' {
-    (Just (tokenLineCol $1), AbsSPL.BitNot (Just (tokenLineCol $1)))
-}
-
-AddOp :: { (Pos, AddOp Pos) }
-AddOp
-: '+' {
-    (Just (tokenLineCol $1), AbsSPL.Plus (Just (tokenLineCol $1)))
-}
-| '-' {
-    (Just (tokenLineCol $1), AbsSPL.Minus (Just (tokenLineCol $1)))
-}
-
-MulOp :: { (Pos, MulOp Pos) }
-MulOp
-: '*' {
-    (Just (tokenLineCol $1), AbsSPL.Times (Just (tokenLineCol $1)))
-}
-| '/' {
-    (Just (tokenLineCol $1), AbsSPL.Div (Just (tokenLineCol $1)))
-}
-| '%' {
-    (Just (tokenLineCol $1), AbsSPL.Mod (Just (tokenLineCol $1)))
-}
-| '<<' {
-    (Just (tokenLineCol $1), AbsSPL.LShift (Just (tokenLineCol $1)))
-}
-| '>>' {
-    (Just (tokenLineCol $1), AbsSPL.RShift (Just (tokenLineCol $1)))
-}
-| '&' {
-    (Just (tokenLineCol $1), AbsSPL.BitAnd (Just (tokenLineCol $1)))
-}
-| '|' {
-    (Just (tokenLineCol $1), AbsSPL.BitOr (Just (tokenLineCol $1)))
-}
-| '^' {
-    (Just (tokenLineCol $1), AbsSPL.BitXor (Just (tokenLineCol $1)))
-}
-
-RelOp :: { (Pos, RelOp Pos) }
-RelOp
-: '<' {
-    (Just (tokenLineCol $1), AbsSPL.LTH (Just (tokenLineCol $1)))
-}
-| '<=' {
-    (Just (tokenLineCol $1), AbsSPL.LE (Just (tokenLineCol $1)))
-}
-| '>' {
-    (Just (tokenLineCol $1), AbsSPL.GTH (Just (tokenLineCol $1)))
-}
-| '>=' {
-    (Just (tokenLineCol $1), AbsSPL.GE (Just (tokenLineCol $1)))
-}
-| '==' {
-    (Just (tokenLineCol $1), AbsSPL.EQU (Just (tokenLineCol $1)))
-}
-| '!=' {
-    (Just (tokenLineCol $1), AbsSPL.NE (Just (tokenLineCol $1)))
 }
 
 {

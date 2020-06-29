@@ -33,6 +33,7 @@ $white+ ;
 $c ($l | $d | \_)*  { tok (\p s -> PT p (eitherResIdent (T_CIdent . share) s)) }
 $s ($l | $d | \_)*  { tok (\p s -> PT p (eitherResIdent (T_VIdent . share) s)) }
 $d+                 { tok (\p s -> PT p (T_Int $ share s))    }
+\" ($u)* \"         { tok (\p s -> PT p (T_String $ removeQuotes s)) }
 
 
 {
@@ -44,6 +45,9 @@ tok f p s = f p s
 
 share :: String -> String
 share = id
+
+removeQuotes :: String -> String
+removeQuotes = tail . init
 
 data Tok = T_Keyword !String !Int   -- reserved words and symbols
          | T_String !String         -- string literals
@@ -102,7 +106,7 @@ resWords = ["!", "!=", "%", "&", "&&", "(", ")", "*" , "+", "++",
             "null", "return" , "true", "void", "while", "{", "|",
             "||", "}", "~", "for", "to", "down", "in", "by",
             "extends", "constr", "then", "typedef", "char", "string",
-            "real"]
+            "real", "or", "and"]
 
 resWordsMap :: M.Map String Tok
 resWordsMap = M.fromList (map (\(s, i) -> (s, T_Keyword s i)) (zip resWords [1..]))

@@ -9,6 +9,7 @@ import BasicBlock
 import GraphColoring ( colorBBGraph )
 import CodeM
 import IR
+import Operator
 import Token
 
 import Control.Monad.Trans.State

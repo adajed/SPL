@@ -1,0 +1,39 @@
+typedef Leaf = int;
+typedef Node = int(int, int);
+typedef Tree = int(Node, Leaf);
+
+int depth(Tree t)
+{
+    Node f = \int l, int r -> if l > r then l + 1 else r + 1;
+    Leaf b = 0;
+
+    return t(f, b);
+}
+
+int number_of_leafs(Tree t)
+{
+    return t(\int a, int b -> a + b, 1);
+}
+
+Tree node(Tree left, Tree right)
+{
+    return \Node f, Leaf b -> f(left(f, b), right(f, b));
+}
+
+Tree leaf()
+{
+    return \Node f, Leaf b -> b;
+}
+
+int main()
+{
+    Tree t = node(node(node(leaf(), leaf()),
+                       node(leaf(), leaf())),
+                  node(node(leaf(), leaf()),
+                       leaf()));
+
+    printInt(depth(t));
+    printInt(number_of_leafs(t));
+
+    return 0;
+}

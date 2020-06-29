@@ -2,6 +2,7 @@ module CodeM where
 
 import AbsSPL
 import IR
+import Operator
 import Token ( VIdent )
 
 import Data.List ( intercalate )
@@ -76,12 +77,14 @@ showReg QWord (RegN n) = "r" ++ show n
 data Val = VInt Int Size
          | VReg Reg Size
          | VMem Reg Int Size
+         | VMemLabel VIdent Size
          | VLabel VIdent
          deriving (Eq, Ord)
 instance Show Val where
     show (VInt n size)   = show size ++ " " ++ show n
     show (VLabel l)      = show l
     show (VReg r size)   = showReg size r
+    show (VMemLabel name size) = show size ++ " [" ++ show name ++ "]"
     show (VMem r n size) = show size ++ " [" ++ showReg QWord r ++ f n ++ "]"
         where f x | x == 0    = ""
                   | x > 0     = "+" ++ show x
@@ -130,7 +133,7 @@ data Code = CAdd Val Val    -- add
           | CIMul Val Val   -- signed mul
           | CInc Val        -- increment
           | CJump Val       -- jump
-          | CCondJump IR.RelOp Val -- conditional jump
+          | CCondJump Operator Val -- conditional jump
           | CMov Val Val    -- move
           | CNeg Val        -- neg
           | CBitNot Val     -- bitwise not
@@ -159,12 +162,12 @@ instance Show Code where
                   CIMul a b             -> c ["imul", show a, ",", show b]
                   CInc a                -> c ["inc", show a]
                   CJump a               -> c ["jmp", show a]
-                  CCondJump IR.LTH a    -> c ["jl", show a]
-                  CCondJump IR.LEQ a    -> c ["jle", show a]
-                  CCondJump IR.GTH a    -> c ["jg", show a]
-                  CCondJump IR.GEQ a    -> c ["jge", show a]
-                  CCondJump IR.NEQ a    -> c ["jne", show a]
-                  CCondJump IR.EQU a    -> c ["je", show a]
+                  CCondJump Less a      -> c ["jl", show a]
+                  CCondJump LessEq a    -> c ["jle", show a]
+                  CCondJump Greater a   -> c ["jg", show a]
+                  CCondJump GreaterEq a -> c ["jge", show a]
+                  CCondJump NotEqual a  -> c ["jne", show a]
+                  CCondJump Equal a     -> c ["je", show a]
                   CMov a b              -> c ["mov", show a, ",", show b]
                   CNeg a                -> c ["neg", show a]
                   CBitNot a             -> c ["not", show a]

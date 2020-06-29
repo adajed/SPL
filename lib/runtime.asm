@@ -11,7 +11,7 @@ extern __printf_chk                                     ; near
 extern _GLOBAL_OFFSET_TABLE_                            ; byte
 
 
-SECTION .text   align=16 execute                        ; section number 1, code
+SECTION .text   align=16
 
 printInt:
         lea     rsi, [rel LC0]
@@ -35,21 +35,29 @@ freeMemory:
 ALIGN   16
 
 print:
-    mov rcx, rdi
+    push rbx
+    mov rbx, rdi
     mov rax, 1
     mov rdi, 1
-    lea rsi, [rcx+8]
-    mov edx, [rcx+4]
+    lea rsi, [rbx+8]
+    mov edx, [rbx+4]
     syscall
+    dec DWORD [rbx]
+    cmp DWORD [rbx], DWORD 0
+    jne .L1
+    mov rdi, rbx
+    call free
+.L1:
+    pop rbx
     ret
 
-SECTION .data   align=1 noexecute                       ; section number 2, data
+SECTION .data   align=1
 
 
-SECTION .bss    align=1 noexecute                       ; section number 3, bss
+SECTION .bss    align=1
 
 
-SECTION .rodata.str1.1 align=1 noexecute                ; section number 4, const
+SECTION .rodata.str1.1 align=1
 
 LC0:                                                   ; byte
         db 25H, 64H, 0AH, 00H                           ; 0000 _ %d..
