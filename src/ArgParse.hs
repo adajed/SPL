@@ -35,7 +35,7 @@ options2 = OptimizationOptions { doConstantFolding = True
                                }
 
 options3 :: OptimizationOptions
-options3 = OptimizationOptions { , doConstantFolding = True
+options3 = OptimizationOptions { doConstantFolding = True
                                , doArithmeticOptimizations = True
                                , doCopyPropagation = True
                                , doDeadCodeElimination = True

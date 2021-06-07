@@ -105,7 +105,7 @@ writeIRData h (fName, xs) = do
     mapM_ f xs
     hPutStrLn h ""
 
-compileProgram :: OptimizationOptions -> String -> Err (Program (), M.Map VIdent BBGraph,  M.Map VIdent [AssemblerInstr], M.Map VIdent [DataIR])
+compileProgram :: OptimizationOptions -> String -> Err (Program (), M.Map VIdent BBGraph,  M.Map VIdent [Code], M.Map VIdent [DataIR])
 compileProgram options fileContent = do
     let abstractTree = lexer fileContent
     program <- parser abstractTree
