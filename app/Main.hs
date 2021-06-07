@@ -105,31 +105,31 @@ writeIRData h (fName, xs) = do
     mapM_ f xs
     hPutStrLn h ""
 
-compileProgram :: String -> Err (Program (), M.Map VIdent BBGraph,  M.Map VIdent [Code], M.Map VIdent [DataIR])
-compileProgram fileContent = do
+compileProgram :: OptimizationOptions -> String -> Err (Program (), M.Map VIdent BBGraph,  M.Map VIdent [AssemblerInstr], M.Map VIdent [DataIR])
+compileProgram options fileContent = do
     let abstractTree = lexer fileContent
     program <- parser abstractTree
     program' <- staticCheck program
     programir <- runGenerateIR program'
-    ir <- optimizeCode (textSection programir)
+    ir <- optimizeCode options (textSection programir)
     let code = M.map genCode ir
     return (fmap (const ()) program, ir, code, dataSection programir)
 
 
-optimizeCode :: M.Map VIdent [IR] -> Err (M.Map VIdent BBGraph)
-optimizeCode p = do
+optimizeCode :: OptimizationOptions -> M.Map VIdent [IR] -> Err (M.Map VIdent BBGraph)
+optimizeCode options p = do
     let p' = M.mapWithKey splitIntoBasicBlocks p
     p <- mapM toSSA p'
-    p <- return (basicOptimize p)
-    p <- return (optimize p)
+    p <- return (basicOptimize options p)
+    p <- return (optimize options p)
     p <- return (M.map finishOptimizations p)
     return p
 
-run :: Bool -> Bool -> String -> IO ()
-run bShowTree bSaveIR filepath = do
+run :: Bool -> Bool -> OptimizationOptions -> String -> IO ()
+run bShowTree bSaveIR options filepath = do
     hPutStrLn stderr ("Compiling " ++ filepath)
     fileContent <- readFile filepath
-    case compileProgram fileContent of
+    case compileProgram options fileContent of
       Bad errorMsg -> do
           hPutStrLn stderr errorMsg
           exitFailure
@@ -160,8 +160,9 @@ main = do
         hPutStrLn stderr "Usage: ./spl source-files"
         exitFailure
     _ -> do
-        let a = parseArgs args
+        a <- parseArgs args
         let aShowTree = ArgParse.showTree a
         let bSaveIR = saveIR a
+        let optOptions = optimizationOptions a
         let aFilePaths = filepaths a
-        mapM_ (run aShowTree bSaveIR) aFilePaths
+        mapM_ (run aShowTree bSaveIR optOptions) aFilePaths
