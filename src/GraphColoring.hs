@@ -1,10 +1,12 @@
 module GraphColoring (
-    colorBBGraph
+    allocateRegisters
                      ) where
 
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.List as L
+
+import Data.Ord ( comparing )
 
 import AbsSPL
 import BasicBlock
@@ -14,34 +16,42 @@ import IR
 import Token
 
 data Node = NVar SVar | NReg Reg
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 type CollisionGraph = M.Map Node (S.Set Node)
 
 type Coloring = M.Map Node (Maybe Int)
 
-k :: Int
-k = length regs
+allocateRegisters :: Bool -> BBGraph -> (BBGraph, M.Map SVar Reg)
+allocateRegisters True = allocateRegisters_complex
+allocateRegisters False = allocateRegisters_basic
 
-allColors :: [Maybe Int]
-allColors = map Just [1..k]
 
-colorBBGraph :: BBGraph -> (BBGraph, M.Map SVar Reg)
-colorBBGraph g = colorBBGraph' g S.empty
+allocateRegisters_basic :: BBGraph -> (BBGraph, M.Map SVar Reg)
+allocateRegisters_basic graph = allocateRegisters_complex graph'
+    where graph' = foldl spillVar graph (map NVar allVars)
+          allVars = filter (\(SVar _ size) -> size > 0) $ S.toList (getAllVarsBBGraph graph)
 
-colorBBGraph' :: BBGraph -> S.Set Node -> (BBGraph, M.Map SVar Reg)
-colorBBGraph' g spilledVars =
+
+allocateRegisters_complex :: BBGraph -> (BBGraph, M.Map SVar Reg)
+allocateRegisters_complex = colorBBGraph allRegs
+
+colorBBGraph :: [Reg] -> BBGraph -> (BBGraph, M.Map SVar Reg)
+colorBBGraph regs g = colorBBGraph' regs g S.empty
+
+colorBBGraph' :: [Reg] -> BBGraph -> S.Set Node -> (BBGraph, M.Map SVar Reg)
+colorBBGraph' regs g spilledVars =
     let liveVars = calculateLiveVars g
         allVars = getAllVarsBBGraph g
-        collisionGraph = calculateCollisionGraph g liveVars
-        (collisionGraph', m) = coallesceGraph g collisionGraph
+        collisionGraph = calculateCollisionGraph regs g liveVars
+        (collisionGraph', m) = coallesceGraph regs g collisionGraph
         costs = calculateSpillingCosts g allVars
-        colors = color collisionGraph' costs spilledVars
+        colors = color regs collisionGraph' costs spilledVars
         colors' = recreateColoring colors m
         s = S.fromList (M.keys (M.filter (==Nothing) colors))
       in if isAllColored colors'
-            then (g, getColoring colors' (map NVar (S.toList allVars)))
-            else colorBBGraph' (spill g colors) (S.union spilledVars s)
+            then (g, getColoring regs colors' (map NVar (S.toList allVars)))
+            else colorBBGraph' regs (spill g colors) (S.union spilledVars s)
 
 getAllVarsBBGraph :: BBGraph -> S.Set SVar
 getAllVarsBBGraph g = S.unions (map getAllVarsBB (M.elems (ids g)))
@@ -76,17 +86,17 @@ recreateColoring c m = foldl go c (M.keys m)
 
 findColor :: Coloring -> M.Map Node Node -> Node -> Maybe Int
 findColor c m n = case c M.!? n of
-                   Just color -> color
+                   Just col -> col
                    Nothing -> findColor c m (m M.! n)
 
-getColoring :: Coloring -> [Node] -> M.Map SVar Reg
-getColoring c vs = M.fromList (map f vs)
-    where f n@(NVar x) = (x, cols M.! (c M.! n))
-          cols = M.fromList (map g (map NReg regs))
-          g n@(NReg r) = (c M.! n, r)
+getColoring :: [Reg] -> Coloring -> [Node] -> M.Map SVar Reg
+getColoring regs coloring vars = M.fromList (map f vars)
+    where f node@(NVar svar) = (svar, _getColor node)
+          _getColor node = _regColors M.! (coloring M.! node)
+          _regColors = M.fromList (map (\reg -> (coloring M.! (NReg reg), reg)) regs)
 
-calculateCollisionGraph :: BBGraph -> BBLiveVars -> CollisionGraph
-calculateCollisionGraph graph liveVars = g''
+calculateCollisionGraph :: [Reg] -> BBGraph -> BBLiveVars -> CollisionGraph
+calculateCollisionGraph regs graph liveVars = g''
     where collisions = concat (M.elems liveVars)
           allVars = S.toList (getAllVarsBBGraph graph)
           initMap = M.fromList (zip (map NVar allVars) (repeat S.empty))
@@ -94,7 +104,7 @@ calculateCollisionGraph graph liveVars = g''
           h m (x1, x2) = ins x1 x2 (ins x2 x1 m)
           ins x y m = M.adjust (S.insert y) x m
           g = foldl f initMap collisions
-          g' = foldl argCollisions (insertRegs g) allVars
+          g' = foldl argCollisions (insertRegs allRegs g) allVars
           g'' = foldl addBBCollision g' (getPairs graph liveVars)
 
 getPairs :: BBGraph -> BBLiveVars -> [(BasicBlock, [S.Set SVar])]
@@ -111,8 +121,8 @@ pairs :: [a] -> [(a, a)]
 pairs [] = []
 pairs (x:xs) = map (\y -> (x, y)) xs ++ pairs xs
 
-insertRegs :: CollisionGraph -> CollisionGraph
-insertRegs g = foldl f g regs
+insertRegs :: [Reg] -> CollisionGraph -> CollisionGraph
+insertRegs regs g = foldl f g regs
     where rest r = S.fromList (map NReg (filter (/= r) regs))
           f g' r = M.insert (NReg r) (rest r) g'
 
@@ -179,20 +189,20 @@ customCollisions m _ = m
 isAllColored :: M.Map Node (Maybe Int) -> Bool
 isAllColored m = M.null (M.filter (== Nothing) m)
 
-color :: CollisionGraph -> M.Map Node Int -> S.Set Node -> Coloring
-color g costs spilledVars =
+color :: [Reg] -> CollisionGraph -> M.Map Node Int -> S.Set Node -> Coloring
+color regs g costs spilledVars =
     if not (hasVar g)
-        then initColoring
-        else let v = case getNode g of
+        then initColoring regs
+        else let v = case getNode regs g of
                        Just v' -> v'
                        Nothing -> chooseValueToSpll g costs spilledVars
                  g' = remove v g
-                 m  = color g' costs spilledVars
-                 c = getColor v g m
+                 m  = color regs g' costs spilledVars
+                 c = getColor regs v g m
               in M.insert v c m
 
-initColoring :: Coloring
-initColoring = M.fromList (zip (map NReg regs) allColors)
+initColoring :: [Reg] -> Coloring
+initColoring regs = M.fromList (zip (map NReg regs) (map Just [1..]))
 
 hasVar :: CollisionGraph -> Bool
 hasVar g = (getAllVars g) /= []
@@ -202,15 +212,16 @@ getAllVars g = filter isNVar (M.keys g)
     where isNVar (NVar _) = True
           isNVar (NReg _) = False
 
+
 -- chooses node with highest number of neighbours
 chooseValueToSpll :: CollisionGraph -> M.Map Node Int -> S.Set Node -> Node
-chooseValueToSpll g costs spilledVars = snd (foldl f (head cs) (tail cs))
-    where cs = map (\n -> (S.size (g M.! n), n)) (filter (`S.notMember` spilledVars) (getAllVars g))
-          f (ix, x) (iy, y) = if iy > ix then (iy, y) else (ix, x)
+chooseValueToSpll collisions costs spilledVars = L.maximumBy (comparing numNeighbours) notSpilledVars
+    where notSpilledVars = filter (`S.notMember` spilledVars) (getAllVars collisions)
+          numNeighbours = S.size . (collisions M.!)
 
-getNode :: CollisionGraph -> Maybe Node
-getNode g = maybe_head ys
-    where xs = M.keys (M.filter ((<k) . S.size) g)
+getNode :: [Reg] -> CollisionGraph -> Maybe Node
+getNode regs g = maybe_head ys
+    where xs = M.keys (M.filter ((< (length regs)) . S.size) g)
           ys = filter f xs
           f (NVar _) = True
           f (NReg _) = False
@@ -218,13 +229,13 @@ getNode g = maybe_head ys
 remove :: Node -> CollisionGraph -> CollisionGraph
 remove v g = M.delete v (M.map (S.delete v) g)
 
-getColor :: Node -> CollisionGraph -> Coloring -> Maybe Int
-getColor v g m = let vs = g M.! v
-                     cs = map (m M.!) (S.toList vs)
-                     allowedCs = filter (`notElem` cs) allColors
-                  in case maybe_head allowedCs of
-                       Just c -> c
-                       Nothing -> Nothing
+getColor :: [Reg] -> Node -> CollisionGraph -> Coloring -> Maybe Int
+getColor regs v g m = let vs = g M.! v
+                          cs = map (m M.!) (S.toList vs)
+                          allowedCs = filter (`notElem` cs) (map (Just . fst) (zip [1..] regs))
+                       in case maybe_head allowedCs of
+                            Just c -> c
+                            Nothing -> Nothing
 
 maybe_head :: [a] -> Maybe a
 maybe_head [] = Nothing
@@ -250,14 +261,8 @@ spillVar g _ = g
 spillIR :: SVar -> IR -> [IR]
 spillIR x ir@(IR_Store _) = [ir]
 spillIR x ir@(IR_Load _) = [ir]
-spillIR x ir =
-    if S.member x (uses ir)
-       then if S.member x (kill ir)
-               then [IR_Load x, ir, IR_Store x]
-               else [IR_Load x, ir]
-       else if S.member x (kill ir)
-               then [ir, IR_Store x]
-               else [ir]
+spillIR x ir = (if f (uses ir) then [IR_Load x] else []) ++ [ir] ++ (if f (kill ir) then [IR_Store x] else [])
+    where f = S.member x
 
 calculateSpillingCosts :: BBGraph -> S.Set SVar -> M.Map Node Int
 calculateSpillingCosts g vars = M.fromList (map f (map NVar (S.toList vars)))
@@ -270,9 +275,10 @@ calculateSpillCostForVar g x = sum (map costBB (M.elems (ids g)))
                      in n1 + n2
           costBB (BB _ xs) = sum (map cost xs)
 
-coallesceGraph :: BBGraph -> CollisionGraph -> (CollisionGraph, M.Map Node Node)
-coallesceGraph g c = foldl go (c, M.empty) xs
+coallesceGraph :: [Reg] -> BBGraph -> CollisionGraph -> (CollisionGraph, M.Map Node Node)
+coallesceGraph regs g c = foldl go (c, M.empty) xs
     where xs = getIRAss g
+          k = length regs
           go (coll, m) (x, y) =
               if (M.notMember x coll) || (M.notMember y coll)
                  then (coll, m)

@@ -23,7 +23,7 @@ import FinishOptimizations
 import GenIR
 import GenerateIR ( runGenerateIR )
 import GenCode ( genCode )
-import GraphColoring ( colorBBGraph )
+import GraphColoring ( allocateRegisters )
 import ErrM
 import IR
 import BasicBlock
@@ -66,9 +66,9 @@ writeIR_BBGraph h g = do
     mapM_ showI bbs
 
 
-writeIR :: Handle -> (VIdent, BBGraph) -> IO ()
-writeIR h (fName, g) = do
-    let (g', regs) = colorBBGraph g
+writeIR :: Handle -> Bool -> (VIdent, BBGraph) -> IO ()
+writeIR h allocRegisters (fName, g) = do
+    let (g', regs) = allocateRegisters allocRegisters g
     hPutStrLn h (show fName ++ ":")
     writeIR_BBGraph h g'
     hPutStrLn h "register allocations:\n"
@@ -105,15 +105,15 @@ writeIRData h (fName, xs) = do
     mapM_ f xs
     hPutStrLn h ""
 
-compileProgram :: OptimizationOptions -> String -> Err (Program (), M.Map VIdent BBGraph,  M.Map VIdent [Code], M.Map VIdent [DataIR])
+compileProgram :: OptimizationOptions -> String -> Err (Program (), M.Map VIdent BBGraph,  M.Map VIdent [Code], ProgramIR)
 compileProgram options fileContent = do
     let abstractTree = lexer fileContent
     program <- parser abstractTree
     program' <- staticCheck program
     programir <- runGenerateIR program'
     ir <- optimizeCode options (textSection programir)
-    let code = M.map genCode ir
-    return (fmap (const ()) program, ir, code, dataSection programir)
+    let code = M.map (genCode (doRegisterAllocation options))  ir
+    return (fmap (const ()) program, ir, code, programir)
 
 
 optimizeCode :: OptimizationOptions -> M.Map VIdent [IR] -> Err (M.Map VIdent BBGraph)
@@ -125,23 +125,41 @@ optimizeCode options p = do
     p <- return (M.map finishOptimizations p)
     return p
 
-run :: Bool -> Bool -> OptimizationOptions -> String -> IO ()
-run bShowTree bSaveIR options filepath = do
+
+getNasmCommand :: Args -> FilePath -> FilePath -> String
+getNasmCommand args fileOut fileCode = "nasm " ++ nasm_args ++ " -o " ++ fileOut ++ " " ++ fileCode
+    where nasm_args = "-felf64" ++ debug
+          debug = if debugBuild args then " -g" else ""
+
+
+getGccCommand :: Args -> FilePath -> FilePath -> String
+getGccCommand args fileOut fileObj = "gcc " ++ gcc_args ++ " -o " ++ fileOut ++ " " ++ fileObj ++ " lib/runtime.o"
+    where gcc_args = "-no-pie" ++ debug
+          debug = if debugBuild args then " -g" else ""
+
+
+run :: Args -> String -> IO ()
+run args filepath = do
+    let options = optimizationOptions args
     hPutStrLn stderr ("Compiling " ++ filepath)
     fileContent <- readFile filepath
     case compileProgram options fileContent of
       Bad errorMsg -> do
           hPutStrLn stderr errorMsg
           exitFailure
-      Ok (program, ir, code, datair) -> do
-          when bShowTree (hPutStrLn stdout (printTree program))
+      Ok (program, ir, code, programir) -> do
+          when (showTree args) (hPutStrLn stdout (printTree program))
+          let codeir = textSection programir
+          let datair = dataSection programir
           let fileIR = changeExtension filepath "ir"
           let fileCode = changeExtension filepath "s"
           let fileObj = changeExtension filepath "o"
           let fileOut = removeExtension filepath
-          when bSaveIR (do
+          when (saveIR args) (do
+              mapM_ (mapM_ ((hPutStrLn stdout) . show)) codeir
+              hPutStrLn stdout (show codeir)
               handleIR <- openFile fileIR WriteMode
-              mapM_ (writeIR handleIR) (M.assocs ir)
+              mapM_ (writeIR handleIR (doRegisterAllocation options)) (M.assocs ir)
               mapM_ (writeIRData handleIR) (M.assocs datair)
               hClose handleIR)
           handleCode <- openFile fileCode WriteMode
@@ -149,8 +167,8 @@ run bShowTree bSaveIR options filepath = do
           hPutStrLn handleCode "\tsection .data\n"
           mapM_ (writeIRData handleCode) (M.assocs datair)
           hClose handleCode
-          callCommand ("nasm -felf64 -o " ++ fileObj ++ " " ++ fileCode)
-          callCommand ("gcc -no-pie -o " ++ fileOut ++ " " ++ fileObj ++ " lib/runtime.o")
+          hPutStrLn stdout (getNasmCommand args fileObj fileCode)
+          hPutStrLn stdout (getGccCommand args fileOut fileObj)
 
 main :: IO ()
 main = do
@@ -161,8 +179,5 @@ main = do
         exitFailure
     _ -> do
         a <- parseArgs args
-        let aShowTree = ArgParse.showTree a
-        let bSaveIR = saveIR a
-        let optOptions = optimizationOptions a
         let aFilePaths = filepaths a
-        mapM_ (run aShowTree bSaveIR optOptions) aFilePaths
+        mapM_ (run a) aFilePaths

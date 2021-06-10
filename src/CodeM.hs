@@ -46,8 +46,8 @@ r13 = RegN 13
 r14 = RegN 14
 r15 = RegN 15
 
-regs :: [Reg]
-regs = [ax, cx, dx, di, si, r8, r9, r10, r11, bx, r12, r13, r14, r15]
+allRegs :: [Reg]
+allRegs = [ax, cx, dx, di, si, r8, r9, r10, r11, bx, r12, r13, r14, r15]
 
 calleeSaveRegs :: [Reg]
 calleeSaveRegs = [ax, cx, dx, di, si, r8, r9, r10, r11]

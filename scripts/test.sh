@@ -1,6 +1,7 @@
 #!/bin/bash
 
-PROGRAM="./spl"
+PROGRAM="./spl -O$1"
+echo ${PROGRAM}
 VALGRIND="valgrind --error-exitcode=1 --leak-check=full"
 
 test_output=0
@@ -80,10 +81,10 @@ FAILED_TESTS=()
 
 FAILED_BAD_TESTS=()
 
-if [ ! -z $1 ]; then
-    single_test $1
-    exit 0
-fi
+# if [ ! -z $1 ]; then
+#     single_test $1
+#     exit 0
+# fi
 
 for test_dir in ${TEST_DIRS[*]}; do
     echo ""
