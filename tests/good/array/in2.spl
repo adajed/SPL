@@ -1,0 +1,17 @@
+int[] reverse(int[] arr)
+{
+    int[] r = new int[arr.length];
+    for (i = 0 to arr.length)
+        r[arr.length - 1 - i] = arr[i];
+    return r;
+}
+
+int main()
+{
+    int[] c = reverse([1, 2, 3]);
+
+    for (i = 0 to c.length)
+        printInt(c[i]);
+
+    return 0;
+}

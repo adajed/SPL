@@ -5,6 +5,7 @@ module ParSPL where
 import AbsSPL
 import LexSPL
 import ErrM
+import Operator
 import Token
 import Type
 
@@ -15,66 +16,73 @@ import Type
 %monad { Err } { thenM } { returnM }
 %tokentype {Token}
 %token
-  '!' { PT _ (TS _ 1) }
-  '!=' { PT _ (TS _ 2) }
-  '%' { PT _ (TS _ 3) }
-  '&' { PT _ (TS _ 4) }
-  '&&' { PT _ (TS _ 5) }
-  '(' { PT _ (TS _ 6) }
-  ')' { PT _ (TS _ 7) }
-  '*' { PT _ (TS _ 8) }
-  '+' { PT _ (TS _ 9) }
-  '++' { PT _ (TS _ 10) }
-  ',' { PT _ (TS _ 11) }
-  '-' { PT _ (TS _ 12) }
-  '--' { PT _ (TS _ 13) }
-  '->' { PT _ (TS _ 14) }
-  '.' { PT _ (TS _ 15) }
-  '/' { PT _ (TS _ 16) }
-  ';' { PT _ (TS _ 17) }
-  '<' { PT _ (TS _ 18) }
-  '<<' { PT _ (TS _ 19) }
-  '<=' { PT _ (TS _ 20) }
-  '=' { PT _ (TS _ 21) }
-  '==' { PT _ (TS _ 22) }
-  '>' { PT _ (TS _ 23) }
-  '>=' { PT _ (TS _ 24) }
-  '>>' { PT _ (TS _ 25) }
-  '[' { PT _ (TS _ 26) }
-  '[]' { PT _ (TS _ 27) }
-  '\\' { PT _ (TS _ 28) }
-  ']' { PT _ (TS _ 29) }
-  '^' { PT _ (TS _ 30) }
-  'bool' { PT _ (TS _ 31) }
-  'class' { PT _ (TS _ 32) }
-  'else' { PT _ (TS _ 33) }
-  'false' { PT _ (TS _ 34) }
-  'if' { PT _ (TS _ 35) }
-  'int' { PT _ (TS _ 36) }
-  'new' { PT _ (TS _ 37) }
-  'null' { PT _ (TS _ 38) }
-  'return' { PT _ (TS _ 39) }
-  'true' { PT _ (TS _ 40) }
-  'void' { PT _ (TS _ 41) }
-  'while' { PT _ (TS _ 42) }
-  '{' { PT _ (TS _ 43) }
-  '|' { PT _ (TS _ 44) }
-  '||' { PT _ (TS _ 45) }
-  '}' { PT _ (TS _ 46) }
-  '~' { PT _ (TS _ 47) }
-  'for' { PT _ (TS _ 48) }
-  'to' { PT _ (TS _ 49) }
-  'down' { PT _ (TS _ 50) }
-  'in' { PT _ (TS _ 51) }
-  'by' { PT _ (TS _ 52) }
-  'extends' { PT _ (TS _ 53) }
-  'constr' { PT _ (TS _ 54) }
-  'then' { PT _ (TS _ 55) }
-  'typedef' { PT _ (TS _ 56) }
+  '!'       { PT _ (T_Keyword _ 1) }
+  '!='      { PT _ (T_Keyword _ 2) }
+  '%'       { PT _ (T_Keyword _ 3) }
+  '&'       { PT _ (T_Keyword _ 4) }
+  '&&'      { PT _ (T_Keyword _ 5) }
+  '('       { PT _ (T_Keyword _ 6) }
+  ')'       { PT _ (T_Keyword _ 7) }
+  '*'       { PT _ (T_Keyword _ 8) }
+  '+'       { PT _ (T_Keyword _ 9) }
+  '++'      { PT _ (T_Keyword _ 10) }
+  ','       { PT _ (T_Keyword _ 11) }
+  '-'       { PT _ (T_Keyword _ 12) }
+  '--'      { PT _ (T_Keyword _ 13) }
+  '->'      { PT _ (T_Keyword _ 14) }
+  '.'       { PT _ (T_Keyword _ 15) }
+  '/'       { PT _ (T_Keyword _ 16) }
+  ';'       { PT _ (T_Keyword _ 17) }
+  '<'       { PT _ (T_Keyword _ 18) }
+  '<<'      { PT _ (T_Keyword _ 19) }
+  '<='      { PT _ (T_Keyword _ 20) }
+  '='       { PT _ (T_Keyword _ 21) }
+  '=='      { PT _ (T_Keyword _ 22) }
+  '>'       { PT _ (T_Keyword _ 23) }
+  '>='      { PT _ (T_Keyword _ 24) }
+  '>>'      { PT _ (T_Keyword _ 25) }
+  '['       { PT _ (T_Keyword _ 26) }
+  '[]'      { PT _ (T_Keyword _ 27) }
+  '\\'      { PT _ (T_Keyword _ 28) }
+  ']'       { PT _ (T_Keyword _ 29) }
+  '^'       { PT _ (T_Keyword _ 30) }
+  'bool'    { PT _ (T_Keyword _ 31) }
+  'class'   { PT _ (T_Keyword _ 32) }
+  'else'    { PT _ (T_Keyword _ 33) }
+  'false'   { PT _ (T_Keyword _ 34) }
+  'if'      { PT _ (T_Keyword _ 35) }
+  'int'     { PT _ (T_Keyword _ 36) }
+  'new'     { PT _ (T_Keyword _ 37) }
+  'null'    { PT _ (T_Keyword _ 38) }
+  'return'  { PT _ (T_Keyword _ 39) }
+  'true'    { PT _ (T_Keyword _ 40) }
+  'void'    { PT _ (T_Keyword _ 41) }
+  'while'   { PT _ (T_Keyword _ 42) }
+  '{'       { PT _ (T_Keyword _ 43) }
+  '|'       { PT _ (T_Keyword _ 44) }
+  '||'      { PT _ (T_Keyword _ 45) }
+  '}'       { PT _ (T_Keyword _ 46) }
+  '~'       { PT _ (T_Keyword _ 47) }
+  'for'     { PT _ (T_Keyword _ 48) }
+  'to'      { PT _ (T_Keyword _ 49) }
+  'down'    { PT _ (T_Keyword _ 50) }
+  'in'      { PT _ (T_Keyword _ 51) }
+  'by'      { PT _ (T_Keyword _ 52) }
+  'extends' { PT _ (T_Keyword _ 53) }
+  'constr'  { PT _ (T_Keyword _ 54) }
+  'then'    { PT _ (T_Keyword _ 55) }
+  'typedef' { PT _ (T_Keyword _ 56) }
+  'char'    { PT _ (T_Keyword _ 57) }
+  'string'  { PT _ (T_Keyword _ 58) }
+  'real'    { PT _ (T_Keyword _ 59) }
+  'or'      { PT _ (T_Keyword _ 60) }
+  'and'     { PT _ (T_Keyword _ 61) }
 
-L_integ  { PT _ (TI _) }
+L_integ  { PT _ (T_Int _) }
 L_CIdent { PT _ (T_CIdent _) }
 L_VIdent { PT _ (T_VIdent _) }
+L_String { PT _ (T_String _) }
+L_Char   { PT _ (T_Char _) }
 
 
 %%
@@ -84,10 +92,21 @@ Integer :: { (Pos, Integer) }
     (Just (tokenLineCol $1), read (prToken $1))
 }
 
+String :: { (Pos, String) }
+: L_String {
+    (Just (tokenLineCol $1), prToken $1)
+}
+
+Char :: { (Pos, Char) }
+: L_Char {
+    (Just (tokenLineCol $1), read (prToken $1))
+}
+
 CIdent  :: { (Pos, CIdent) }
 : L_CIdent {
     (Just (tokenLineCol $1), CIdent (prToken $1))
 }
+
 VIdent  :: { (Pos, VIdent) }
 : L_VIdent {
     (Just (tokenLineCol $1), VIdent (prToken $1))
@@ -114,7 +133,7 @@ TopDef
 ListTopDef :: { (Pos, [TopDef Pos]) }
 ListTopDef
 : TopDef {
-    (fst $1, (:[]) (snd $1))
+    (fst $1, [snd $1])
 }
 | TopDef ListTopDef {
     (fst $1, ((:) (snd $1) (snd $2)))
@@ -260,6 +279,12 @@ Type
 : 'int' {
     (Just (tokenLineCol $1), Type.Int (Just (tokenLineCol $1)))
 }
+| 'char' {
+    (Just (tokenLineCol $1), Type.Char (Just (tokenLineCol $1)))
+}
+| 'string' {
+    (Just (tokenLineCol $1), Type.Array (Just (tokenLineCol $1)) (Type.Char Nothing))
+}
 | 'bool' {
     (Just (tokenLineCol $1), Type.Bool (Just (tokenLineCol $1)))
 }
@@ -268,7 +293,6 @@ Type
 }
 | CIdent {
     (fst $1, Type.NamedType (fst $1) (snd $1))
-
 }
 | Type '[]' {
     (fst $1, Type.Array (fst $1) (snd $1))
@@ -294,9 +318,6 @@ Expr7
 : 'null' {
     (Just (tokenLineCol $1), AbsSPL.ENull (Just (tokenLineCol $1)))
 }
-| Integer {
-    (fst $1, AbsSPL.EInt (fst $1) (snd $1))
-}
 | 'true' {
     (Just (tokenLineCol $1), AbsSPL.ETrue (Just (tokenLineCol $1)))
 }
@@ -305,6 +326,15 @@ Expr7
 }
 | VIdent {
     (fst $1, AbsSPL.EVar (fst $1) (snd $1))
+}
+| String {
+    (fst $1, AbsSPL.EString (fst $1) (snd $1))
+}
+| Integer {
+    (fst $1, AbsSPL.EInt (fst $1) (snd $1))
+}
+| Char {
+    (fst $1, AbsSPL.EChar (fst $1) (snd $1))
 }
 | Expr7 '.' VIdent {
     (fst $1, AbsSPL.EField (fst $1) (snd $1) (snd $3))
@@ -321,8 +351,14 @@ Expr7
 
 Expr6 :: { (Pos, Expr Pos) }
 Expr6
-: UnaryOp Expr6 {
-    (fst $1, AbsSPL.EUnaryOp (fst $1) (snd $1) (snd $2))
+: '-' Expr6 {
+    (Just (tokenLineCol $1), AbsSPL.EUnaryOp (Just (tokenLineCol $1)) Neg (snd $2))
+}
+| '!' Expr6 {
+    (Just (tokenLineCol $1), AbsSPL.EUnaryOp (Just (tokenLineCol $1)) Not (snd $2))
+}
+| '~' Expr6 {
+    (Just (tokenLineCol $1), AbsSPL.EUnaryOp (Just (tokenLineCol $1)) BitNot (snd $2))
 }
 | Expr7 {
     $1
@@ -330,8 +366,29 @@ Expr6
 
 Expr5 :: { (Pos, Expr Pos) }
 Expr5
-: Expr5 MulOp Expr6 {
-    (fst $1, AbsSPL.EMul (fst $1) (snd $1) (snd $2) (snd $3))
+: Expr5 '*' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Times (snd $3))
+}
+| Expr5 '/' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Div (snd $3))
+}
+| Expr5 '%' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Mod (snd $3))
+}
+| Expr5 '<<' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) LShift (snd $3))
+}
+| Expr5 '>>' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) RShift (snd $3))
+}
+| Expr5 '&' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) BitAnd (snd $3))
+}
+| Expr5 '|' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) BitOr (snd $3))
+}
+| Expr5 '^' Expr6 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) BitXor (snd $3))
 }
 | Expr6 {
     $1
@@ -339,8 +396,11 @@ Expr5
 
 Expr4 :: { (Pos, Expr Pos) }
 Expr4
-: Expr4 AddOp Expr5 {
-    (fst $1, AbsSPL.EAdd (fst $1) (snd $1) (snd $2) (snd $3))
+: Expr4 '+' Expr5 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Plus (snd $3))
+}
+| Expr4 '-' Expr5 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Minus (snd $3))
 }
 | Expr5 {
     $1
@@ -348,8 +408,23 @@ Expr4
 
 Expr3 :: { (Pos, Expr Pos) }
 Expr3
-: Expr3 RelOp Expr4 {
-    (fst $1, AbsSPL.ERel (fst $1) (snd $1) (snd $2) (snd $3))
+: Expr3 '<' Expr4 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Less (snd $3))
+}
+| Expr3 '<=' Expr4 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) LessEq (snd $3))
+}
+| Expr3 '>' Expr4 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Greater (snd $3))
+}
+| Expr3 '>=' Expr4 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) GreaterEq (snd $3))
+}
+| Expr3 '==' Expr4 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Equal (snd $3))
+}
+| Expr3 '!=' Expr4 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) NotEqual (snd $3))
 }
 | Expr4 {
     $1
@@ -358,7 +433,10 @@ Expr3
 Expr2 :: { (Pos, Expr Pos) }
 Expr2
 : Expr3 '&&' Expr2 {
-    (fst $1, AbsSPL.EAnd (fst $1) (snd $1) (snd $3))
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) And (snd $3))
+}
+| Expr3 'and' Expr2 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) And (snd $3))
 }
 | Expr3 {
     $1
@@ -367,7 +445,10 @@ Expr2
 Expr1 :: { (Pos, Expr Pos) }
 Expr1
 : Expr2 '||' Expr1 {
-    (fst $1, AbsSPL.EOr (fst $1) (snd $1) (snd $3))
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Or (snd $3))
+}
+| Expr2 'or' Expr1 {
+    (fst $1, AbsSPL.EBinOp (fst $1) (snd $1) Or (snd $3))
 }
 | Expr2 {
     $1
@@ -383,6 +464,9 @@ Expr
 }
 | '\\' ListArgument '->' LambdaExpr {
     (Just (tokenLineCol $1), AbsSPL.ELambda (Just (tokenLineCol $1)) (snd $2) (snd $4))
+}
+| '[' ListExpr ']' {
+    (Just (tokenLineCol $1), AbsSPL.EArray (Just (tokenLineCol $1)) (snd $2))
 }
 | Expr1 {
     $1
@@ -410,75 +494,6 @@ LambdaExpr
 }
 | Block {
     (fst $1, AbsSPL.BStmt (fst $1) (snd $1))
-}
-
-UnaryOp :: { (Pos, UnaryOp Pos) }
-UnaryOp
-: '-' {
-    (Just (tokenLineCol $1), AbsSPL.Neg (Just (tokenLineCol $1)))
-}
-| '!' {
-    (Just (tokenLineCol $1), AbsSPL.Not (Just (tokenLineCol $1)))
-}
-| '~' {
-    (Just (tokenLineCol $1), AbsSPL.BitNot (Just (tokenLineCol $1)))
-}
-
-AddOp :: { (Pos, AddOp Pos) }
-AddOp
-: '+' {
-    (Just (tokenLineCol $1), AbsSPL.Plus (Just (tokenLineCol $1)))
-}
-| '-' {
-    (Just (tokenLineCol $1), AbsSPL.Minus (Just (tokenLineCol $1)))
-}
-
-MulOp :: { (Pos, MulOp Pos) }
-MulOp
-: '*' {
-    (Just (tokenLineCol $1), AbsSPL.Times (Just (tokenLineCol $1)))
-}
-| '/' {
-    (Just (tokenLineCol $1), AbsSPL.Div (Just (tokenLineCol $1)))
-}
-| '%' {
-    (Just (tokenLineCol $1), AbsSPL.Mod (Just (tokenLineCol $1)))
-}
-| '<<' {
-    (Just (tokenLineCol $1), AbsSPL.LShift (Just (tokenLineCol $1)))
-}
-| '>>' {
-    (Just (tokenLineCol $1), AbsSPL.RShift (Just (tokenLineCol $1)))
-}
-| '&' {
-    (Just (tokenLineCol $1), AbsSPL.BitAnd (Just (tokenLineCol $1)))
-}
-| '|' {
-    (Just (tokenLineCol $1), AbsSPL.BitOr (Just (tokenLineCol $1)))
-}
-| '^' {
-    (Just (tokenLineCol $1), AbsSPL.BitXor (Just (tokenLineCol $1)))
-}
-
-RelOp :: { (Pos, RelOp Pos) }
-RelOp
-: '<' {
-    (Just (tokenLineCol $1), AbsSPL.LTH (Just (tokenLineCol $1)))
-}
-| '<=' {
-    (Just (tokenLineCol $1), AbsSPL.LE (Just (tokenLineCol $1)))
-}
-| '>' {
-    (Just (tokenLineCol $1), AbsSPL.GTH (Just (tokenLineCol $1)))
-}
-| '>=' {
-    (Just (tokenLineCol $1), AbsSPL.GE (Just (tokenLineCol $1)))
-}
-| '==' {
-    (Just (tokenLineCol $1), AbsSPL.EQU (Just (tokenLineCol $1)))
-}
-| '!=' {
-    (Just (tokenLineCol $1), AbsSPL.NE (Just (tokenLineCol $1)))
 }
 
 {

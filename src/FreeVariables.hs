@@ -87,24 +87,20 @@ calcFreeVars_Expr (EVar _ name) = do
     return set
 calcFreeVars_Expr (EField _ expr _) =
     calcFreeVars_Expr expr
-calcFreeVars_Expr (EArrAcc _ expr1 expr2) =
-    calcFreeVars_Expr2 expr1 expr2
+calcFreeVars_Expr (EArrAcc _ expr1 expr2) = do
+    s1 <- calcFreeVars_Expr expr1
+    s2 <- calcFreeVars_Expr expr2
+    return (S.union s1 s2)
 calcFreeVars_Expr (EApp _ expr1 exprs) = do
     s <- calcFreeVars_Expr expr1
     sx <- mapM calcFreeVars_Expr exprs
     return (S.unions (s:sx))
 calcFreeVars_Expr (EUnaryOp _ _ expr) =
     calcFreeVars_Expr expr
-calcFreeVars_Expr (EMul _ expr1 _ expr2) =
-    calcFreeVars_Expr2 expr1 expr2
-calcFreeVars_Expr (EAdd _ expr1 _ expr2) =
-    calcFreeVars_Expr2 expr1 expr2
-calcFreeVars_Expr (ERel _ expr1 _ expr2) =
-    calcFreeVars_Expr2 expr1 expr2
-calcFreeVars_Expr (EOr _ expr1 expr2) =
-    calcFreeVars_Expr2 expr1 expr2
-calcFreeVars_Expr (EAnd _ expr1 expr2) =
-    calcFreeVars_Expr2 expr1 expr2
+calcFreeVars_Expr (EBinOp _ expr1 _ expr2) = do
+    s1 <- calcFreeVars_Expr expr1
+    s2 <- calcFreeVars_Expr expr2
+    return (S.union s1 s2)
 calcFreeVars_Expr (EObjNew _ _ exprs) = liftM S.unions $ mapM calcFreeVars_Expr exprs
 calcFreeVars_Expr (EArrNew _ _ expr) =
     calcFreeVars_Expr expr
@@ -115,12 +111,6 @@ calcFreeVars_Expr (ELambda _ args stmt) = do
     modify (\s -> s { usedVars = set })
     return s
 
-
-calcFreeVars_Expr2 :: Expr T -> Expr T -> GenM (S.Set VIdent)
-calcFreeVars_Expr2 expr1 expr2 = do
-    s1 <- calcFreeVars_Expr expr1
-    s2 <- calcFreeVars_Expr expr2
-    return (S.union s1 s2)
 
 substitute :: Type T -> VIdent -> S.Set VIdent -> Stmt T -> Stmt T
 substitute ty name vars stmt = runIdentity (evalStateT m initState)
@@ -194,26 +184,10 @@ substitute_Expr (EApp t e ex) = do
 substitute_Expr (EUnaryOp t op e) = do
     e' <- substitute_Expr e
     return (EUnaryOp t op e)
-substitute_Expr (EMul t e1 op e2) = do
+substitute_Expr (EBinOp t e1 op e2) = do
     e1' <- substitute_Expr e1
     e2' <- substitute_Expr e2
-    return (EMul t e1' op e2')
-substitute_Expr (EAdd t e1 op e2) = do
-    e1' <- substitute_Expr e1
-    e2' <- substitute_Expr e2
-    return (EAdd t e1' op e2')
-substitute_Expr (ERel t e1 op e2) = do
-    e1' <- substitute_Expr e1
-    e2' <- substitute_Expr e2
-    return (ERel t e1' op e2')
-substitute_Expr (EAnd t e1 e2) = do
-    e1' <- substitute_Expr e1
-    e2' <- substitute_Expr e2
-    return (EAnd t e1' e2')
-substitute_Expr (EOr t e1 e2) = do
-    e1' <- substitute_Expr e1
-    e2' <- substitute_Expr e2
-    return (EOr t e1' e2')
+    return (EBinOp t e1' op e2')
 substitute_Expr (EArrNew t ty e) = do
     e' <- substitute_Expr e
     return (EArrNew t ty e')

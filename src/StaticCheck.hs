@@ -42,20 +42,6 @@ tryGetClassName :: Pos -> T -> CheckM CIdent
 tryGetClassName _ (Class _ cls) = return cls
 tryGetClassName pos _ = errorMsg pos "Type is not a class"
 
-unaryOpType :: UnaryOp a -> T
-unaryOpType (Neg _)    = intT
-unaryOpType (Not _)    = boolT
-unaryOpType (BitNot _) = intT
-
-mulOpType :: MulOp a -> T
-mulOpType _ = intT
-
-addOpType :: AddOp a -> T
-addOpType _ = intT
-
-relOpType :: RelOp a -> T
-relOpType _ = intT
-
 staticCheck_Program :: Program Pos -> CheckM (Program T)
 staticCheck_Program (Prog _ topdefs) = do
     buildClassGraph topdefs
@@ -317,6 +303,9 @@ staticCheck_Expr (EInt _ n) = return (EInt intT n, intT)
 staticCheck_Expr (ETrue _) = return (ETrue boolT, boolT)
 staticCheck_Expr (EFalse _) = return (EFalse boolT, boolT)
 staticCheck_Expr (ENull _) = return (ENull nullT, nullT)
+staticCheck_Expr (EChar _ c) = return (EChar charT c, charT)
+staticCheck_Expr (EString _ str) = return (EString t str, t)
+    where t = arrayT charT
 staticCheck_Expr (EVar pos name) = do
     let err = errorMsg pos $ "Variable " ++ show name ++ " not declared"
     info <- liftM (M.!? name) $ gets varEnv
@@ -370,54 +359,16 @@ staticCheck_Expr (EApp pos funExpr argExprs) = do
     return (EApp retT funExpr' argExprs', retT)
 staticCheck_Expr (EUnaryOp pos op expr) = do
     (expr', t) <- staticCheck_Expr expr
-    assertCanAssign pos (unaryOpType op) t
-    let op' = toVoid op
-    return (EUnaryOp t op' expr', t)
-staticCheck_Expr (EMul pos expr1 op expr2) = do
+    assertTypeMatchOper pos op t
+    t' <- getOutputType op t
+    return (EUnaryOp t' op expr', t')
+staticCheck_Expr (EBinOp pos expr1 op expr2) = do
     (expr1', t1) <- staticCheck_Expr expr1
     (expr2', t2) <- staticCheck_Expr expr2
-    assertCanAssign pos intT t1
-    assertCanAssign pos intT t2
-    let op' = toVoid op
-    return (EMul intT expr1' op' expr2', intT)
-staticCheck_Expr (EAdd pos expr1 op expr2) = do
-    (expr1', t1) <- staticCheck_Expr expr1
-    (expr2', t2) <- staticCheck_Expr expr2
-    assertCanAssign pos intT t1
-    assertCanAssign pos intT t2
-    let op' = toVoid op
-    return (EAdd intT expr1' op' expr2', intT)
-staticCheck_Expr (ERel pos expr1 (EQU _) expr2) = do
-    (expr1', t1) <- staticCheck_Expr expr1
-    (expr2', t2) <- staticCheck_Expr expr2
-    assertTypesEqual pos t1 t2
-    let op' = EQU voidT
-    return (ERel boolT expr1' op' expr2', boolT)
-staticCheck_Expr (ERel pos expr1 (NE _) expr2) = do
-    (expr1', t1) <- staticCheck_Expr expr1
-    (expr2', t2) <- staticCheck_Expr expr2
-    assertTypesEqual pos t1 t2
-    let op' = NE voidT
-    return (ERel boolT expr1' op' expr2', boolT)
-staticCheck_Expr (ERel pos expr1 op expr2) = do
-    (expr1', t1) <- staticCheck_Expr expr1
-    (expr2', t2) <- staticCheck_Expr expr2
-    assertTypesEqual pos intT t1
-    assertTypesEqual pos intT t2
-    let op' = toVoid op
-    return (ERel boolT expr1' op' expr2', boolT)
-staticCheck_Expr (EAnd pos expr1 expr2) = do
-    (expr1', t1) <- staticCheck_Expr expr1
-    (expr2', t2) <- staticCheck_Expr expr2
-    assertTypesEqual pos boolT t1
-    assertTypesEqual pos boolT t2
-    return (EAnd boolT expr1' expr2', boolT)
-staticCheck_Expr (EOr pos expr1 expr2) = do
-    (expr1', t1) <- staticCheck_Expr expr1
-    (expr2', t2) <- staticCheck_Expr expr2
-    assertTypesEqual pos boolT t1
-    assertTypesEqual pos boolT t2
-    return (EOr boolT expr1' expr2', boolT)
+    t <- getCommonType pos t1 t2
+    assertTypeMatchOper pos op t
+    t' <- getOutputType op t
+    return (EBinOp t' expr1' op expr2', t')
 staticCheck_Expr (EObjNew pos cls exprs) = do
     (exprs', ts') <- liftM unzip $ mapM staticCheck_Expr exprs
     let constrT = funT voidT ts'
@@ -446,6 +397,18 @@ staticCheck_Expr (ELambda pos args stmt) = doWithSavedEnv m
             let t' = Fun () tOut ts
             modify (\s -> s { rettype = tRetPrev })
             return (ELambda t' args' stmt', t')
+staticCheck_Expr (EArray pos exprs) = do
+    (exprs', ts) <- liftM unzip $ mapM staticCheck_Expr exprs
+    g <- gets classGraph
+    case ts of
+      [] -> errorMsg pos "Cannot create empty array"
+      (x:xs) -> let m Nothing t' = Nothing
+                    m (Just t) t' = commonSuperType g t t'
+                    commotT = foldl m (Just x) xs
+                 in case commotT of
+                      Nothing -> errorMsg pos "Cannot find common type"
+                      Just t -> return (EArray (arrayT t) exprs', arrayT t)
+
 
 staticCheck_getRetExpr :: Pos -> Stmt Pos -> CheckM T
 staticCheck_getRetExpr pos stmt = do
@@ -485,16 +448,15 @@ getPos_Expr (ENull pos) = pos
 getPos_Expr (EInt pos _) = pos
 getPos_Expr (ETrue pos) = pos
 getPos_Expr (EFalse pos) = pos
+getPos_Expr (EChar pos _) = pos
+getPos_Expr (EString pos _) = pos
 getPos_Expr (EVar pos _) = pos
 getPos_Expr (EField pos _ _) = pos
 getPos_Expr (EArrAcc pos _ _) = pos
 getPos_Expr (EApp pos _ _) = pos
 getPos_Expr (EUnaryOp pos _ _) = pos
-getPos_Expr (EMul pos _ _ _) = pos
-getPos_Expr (EAdd pos _ _ _) = pos
-getPos_Expr (ERel pos _ _ _) = pos
-getPos_Expr (EAnd pos _ _) = pos
-getPos_Expr (EOr pos _ _) = pos
+getPos_Expr (EBinOp pos _ _ _) = pos
 getPos_Expr (EObjNew pos _ _) = pos
 getPos_Expr (EArrNew pos _ _) = pos
 getPos_Expr (ELambda pos _ _) = pos
+getPos_Expr (EArray pos _) = pos

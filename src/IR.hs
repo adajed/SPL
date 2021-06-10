@@ -2,6 +2,7 @@ module IR where
 
 import Data.List ( intercalate )
 
+import Operator
 import Token ( VIdent )
 
 data Var = VarN VIdent | VarT Int | VarC VIdent Int | VarA Int
@@ -80,7 +81,7 @@ data IR = IR_Label VIdent                    -- label
         | IR_Return ValIR                   -- return value from function
         | IR_VoidReturn
         | IR_Jump VIdent
-        | IR_CondJump ValIR RelOp ValIR VIdent
+        | IR_CondJump ValIR Operator ValIR VIdent
         | IR_Phi SVar [(Int, ValIR)]       -- phi function (for SSA)
         | IR_Nop                          -- no op
         | IR_Argument SVar                 -- argument from function
@@ -108,9 +109,14 @@ instance Show IR where
                 IR_Load x               -> c ["load", show x]
             where c = intercalate " "
 
-data DataIR = IR_DataQ ValIR
+data DataIR = IR_DataVal ValIR Int
+            | IR_DataStr String
     deriving (Eq, Ord)
 instance Show DataIR where
     show ir = case ir of
-                IR_DataQ v  -> c ["dq", show v]
+                IR_DataVal v 1 -> c ["db", show v]
+                IR_DataVal v 2 -> c ["dw", show v]
+                IR_DataVal v 4 -> c ["dd", show v]
+                IR_DataVal v 8 -> c ["dq", show v]
+                IR_DataStr str -> c ["db", "\"" ++ str ++ "\""]
             where c = intercalate " "

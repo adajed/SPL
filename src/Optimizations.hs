@@ -12,30 +12,42 @@ import DeadCodeElimination
 import GlobalCommonSubexpressionElimination
 import LocalCommonSubexpressionElimination
 import RemoveNop
+import RemoveVoidVariables
 import Token
 import TrivialPhiElimination
 import UnreachableCodeElimination
 
-basicOptimize :: Map VIdent BBGraph -> Map VIdent BBGraph
-basicOptimize = iterateUntilFixpoint opts
-    where opts = (Map.map (removeNop . deadCodeElimination . copyPropagation . constantFolding))
+data OptimizationOptions = OptimizationOptions { doConstantFolding :: Bool
+                                               , doArithmeticOptimizations :: Bool
+                                               , doCopyPropagation :: Bool
+                                               , doDeadCodeElimination :: Bool
+                                               , doCommonSubexpressionElimination :: Bool
+                                               , doRegisterAllocation :: Bool
+                                               }
 
-optimize :: Map VIdent BBGraph -> Map VIdent BBGraph
-optimize program = iterateUntilFixpoint opts program
-    where opts = (Map.mapWithKey unreachableCodeElimination)
-               . (Map.map optimizeBBGraph)
-
-optimizeBBGraph :: BBGraph -> BBGraph
-optimizeBBGraph g = iterateUntilFixpoint opts g
+basicOptimize :: OptimizationOptions -> Map VIdent BBGraph -> Map VIdent BBGraph
+basicOptimize options = iterateUntilFixpoint (Map.map opts)
     where opts = removeNop
-               . globalCommonSubexpressionElimination
-               . localCommonSubexpressionElimination
-               . arithmeticOptimizations
-               . deadCodeElimination
-               . trivialPhiElimination
-               . copyPropagation
-               . constantFolding
+               . (if doDeadCodeElimination options then deadCodeElimination else id)
+               . (if doCopyPropagation options then copyPropagation else id)
+               . (if doConstantFolding options then constantFolding else id)
+               . removeVoidVariables
 
+optimize :: OptimizationOptions -> Map VIdent BBGraph -> Map VIdent BBGraph
+optimize options = iterateUntilFixpoint opts
+    where opts = (Map.mapWithKey unreachableCodeElimination)
+               . (Map.map (optimizeBBGraph options))
+
+optimizeBBGraph :: OptimizationOptions -> BBGraph -> BBGraph
+optimizeBBGraph options = iterateUntilFixpoint opts
+    where opts = removeNop
+               . (if doCommonSubexpressionElimination options then globalCommonSubexpressionElimination else id)
+               . (if doCommonSubexpressionElimination options then localCommonSubexpressionElimination else id)
+               . (if doArithmeticOptimizations options then arithmeticOptimizations else id)
+               . (if doDeadCodeElimination options then deadCodeElimination else id)
+               . trivialPhiElimination
+               . (if doCopyPropagation options then copyPropagation else id)
+               . (if doConstantFolding options then constantFolding else id)
 
 iterateUntilFixpoint :: Eq a => (a -> a) -> a -> a
 iterateUntilFixpoint f x =

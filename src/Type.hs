@@ -1,7 +1,7 @@
 module Type (
     Type(..),
     T,
-    intT, boolT, voidT, nullT,
+    intT, boolT, voidT, nullT, charT,
     arrayT, funT, classT,
     isSubtype,
     isSubtypeList,
@@ -18,6 +18,7 @@ import Data.List ( intercalate )
 data Type a
     = Int a
     | Bool a
+    | Char a
     | Void a
     | Class a CIdent
     | Array a (Type a)
@@ -29,6 +30,7 @@ data Type a
 instance Show (Type a) where
     show t = case t of
                Int _  -> "int"
+               Char _ -> "char"
                Bool _ -> "bool"
                Void _ -> "void"
                Class _ cls -> "(class)" ++ show cls
@@ -51,11 +53,12 @@ instance Functor Type where
         NamedType a cident -> NamedType (f a) cident
 
 
-intT, boolT, voidT, nullT :: T
+intT, boolT, voidT, nullT, charT :: T
 intT = Int ()
 boolT = Bool ()
 voidT = Void ()
 nullT = Null ()
+charT = Char ()
 
 arrayT :: T -> T
 arrayT = Array ()
@@ -82,6 +85,7 @@ isSubtype g (Fun _ tOut1 tArgs1) (Fun _ tOut2 tArgs2) =
 isSubtype _ (Int _) (Int _) = True
 isSubtype _ (Bool _) (Bool _) = True
 isSubtype _ (Void _) (Void _) = True
+isSubtype _ (Char _) (Char _) = True
 isSubtype _ _ _ = False
 
 isSubtypeList :: M.Map CIdent CIdent -> [Type a] -> [Type a] -> Bool
@@ -111,6 +115,7 @@ commonSuperType _ (Int ()) (Int ()) = return (Int ())
 commonSuperType _ (Bool ()) (Bool ()) = return (Bool ())
 commonSuperType _ (Void ()) (Void ()) = return (Void ())
 commonSuperType _ (Null ()) (Null ()) = return (Null ())
+commonSuperType _ (Char ()) (Char ()) = return (Char ())
 commonSuperType _ _ _ = Nothing
 
 searchCommonAncestor :: M.Map CIdent CIdent -> CIdent -> CIdent -> Maybe CIdent

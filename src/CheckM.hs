@@ -10,6 +10,7 @@ import qualified Data.Set as S
 import AbsSPL
 import LexSPL
 import ErrM
+import Operator
 import Token
 import Type
 
@@ -45,15 +46,67 @@ data SState = SState { rettype      :: T
                      , level        :: Level
                      , currentClass :: Maybe CIdent
                      , classGraph   :: M.Map CIdent CIdent
-                     , typedefs :: M.Map CIdent T
+                     , typedefs     :: M.Map CIdent T
+                     , operatorTypes :: M.Map Operator (T -> Bool)
+                     , operatorOutput :: M.Map Operator (T -> T)
                      }
 
 type CheckM a = StateT SState Err a
 
 initialEnv :: VarEnv
-initialEnv = M.fromList [(VIdent "printInt", VarInfo { varLevel = 0
-                                                     , varType  = funT voidT [intT] })
+initialEnv = M.fromList [ (VIdent "printInt", v 0 (funT voidT [intT]))
+                        , (VIdent "print", v 0 (funT voidT [arrayT charT]))
                         ]
+    where v n t = VarInfo { varLevel = n, varType = t }
+
+initialOperatorTypes :: M.Map Operator (T -> Bool)
+initialOperatorTypes = M.fromList [ (Neg,       (==intT))
+                                  , (Not,       (==boolT))
+                                  , (BitNot,    (==intT))
+                                  , (Or,        (==boolT))
+                                  , (And,       (==boolT))
+                                  , (Plus,      (==intT))
+                                  , (Minus,     (==intT))
+                                  , (Times,     (==intT))
+                                  , (Div,       (==intT))
+                                  , (Mod,       (==intT))
+                                  , (LShift,    (==intT))
+                                  , (RShift,    (==intT))
+                                  , (BitAnd,    (==intT))
+                                  , (BitOr,     (==intT))
+                                  , (BitXor,    (==intT))
+                                  , (Less,      (==intT))
+                                  , (LessEq,    (==intT))
+                                  , (Greater,   (==intT))
+                                  , (GreaterEq, (==intT))
+                                  , (Equal,     (const True))
+                                  , (NotEqual,  (const True))
+                                  ]
+
+
+initialOperatorOutput :: M.Map Operator (T -> T)
+initialOperatorOutput = M.fromList [ (Neg,       id)
+                                   , (Not,       id)
+                                   , (BitNot,    id)
+                                   , (Or,        id)
+                                   , (And,       id)
+                                   , (Plus,      id)
+                                   , (Minus,     id)
+                                   , (Times,     id)
+                                   , (Div,       id)
+                                   , (Mod,       id)
+                                   , (LShift,    id)
+                                   , (RShift,    id)
+                                   , (BitAnd,    id)
+                                   , (BitOr,     id)
+                                   , (BitXor,    id)
+                                   , (Less,      const boolT)
+                                   , (LessEq,    const boolT)
+                                   , (Greater,   const boolT)
+                                   , (GreaterEq, const boolT)
+                                   , (Equal,     const boolT)
+                                   , (NotEqual,  const boolT)
+                                   ]
 
 runCheckM :: CheckM a -> Err a
 runCheckM m = evalStateT m initialSState
@@ -64,6 +117,8 @@ runCheckM m = evalStateT m initialSState
                                  , currentClass = Nothing
                                  , classGraph = M.empty
                                  , typedefs = M.empty
+                                 , operatorTypes = initialOperatorTypes
+                                 , operatorOutput = initialOperatorOutput
                                  }
 
 assertVariableNotDeclared :: Pos -> VIdent -> CheckM ()
@@ -166,3 +221,21 @@ assertCanAssign pos t1 t2 = do
     g <- gets classGraph
     let err = errorMsg pos $ show t2 ++ " is not a subtype of " ++ show t1
     unless (isSubtype g t1 t2) err
+
+getCommonType :: Pos -> T -> T -> CheckM T
+getCommonType pos t1 t2 = do
+    g <- gets classGraph
+    case commonSuperType g t1 t2 of
+      Nothing -> errorMsg pos $ show t1 ++ " doesn't match " ++ show t2
+      Just t -> return t
+
+assertTypeMatchOper :: Pos -> Operator -> T -> CheckM ()
+assertTypeMatchOper pos op t = do
+    m <- gets operatorTypes
+    let err = errorMsg pos $ show t ++ " doesn't match \"" ++ show op ++ "\""
+    unless ((m M.! op) t) err
+
+getOutputType :: Operator -> T -> CheckM T
+getOutputType op t = do
+    m <- gets operatorOutput
+    return ((m M.! op) t)

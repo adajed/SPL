@@ -68,7 +68,7 @@ mkEsc q s = case s of
   _ -> showChar s
 
 prPrec :: Int -> Int -> Doc -> Doc
-prPrec i j = if j<i then parenth else id
+prPrec i j = if j < i then parenth else id
 
 
 instance Print Integer where
@@ -97,7 +97,13 @@ instance Print (Program a) where
 
 instance Print (TopDef a) where
   prt i e = case e of
-    FnDef _ type_ vident arguments block -> prPrec i 0 (concatD [prt 0 type_, prt 0 vident, doc (showString "("), prt 0 arguments, doc (showString ")"), prt 0 block])
+    FnDef _ type_ vident arguments block -> prPrec i 0 (concatD [prt 0 type_,
+                                                                 prt 0 vident,
+                                                                 doc (showString "("),
+                                                                 prt 0 arguments,
+                                                                 doc (showString ")"),
+                                                                 prt 0 block
+                                                                ])
     ClassDef _ cident extends classelems -> prPrec i 0 (concatD [doc (showString "class"),
                                                                  prt 0 cident,
                                                                  doc (showString "{"),
@@ -200,6 +206,7 @@ instance Print (Item a) where
 instance Print (Type a) where
   prt i e = case e of
     Int _ -> prPrec i 0 (concatD [doc (showString "int")])
+    Char _ -> prPrec i 0 (concatD [doc (showString "char")])
     Bool _ -> prPrec i 0 (concatD [doc (showString "bool")])
     Void _ -> prPrec i 0 (concatD [doc (showString "void")])
     Class _ cident -> prPrec i 0 (concatD [prt 0 cident])
@@ -213,6 +220,8 @@ instance Print (Type a) where
 instance Print (Expr a) where
   prt i e = case e of
     ETypedExpr _ type_ expr -> prPrec i 6 (concatD [prt 0 type_, prt 6 expr])
+    EChar _ char -> prPrec i 6 (concatD [doc (showChar char)])
+    EString _ string -> prPrec i 6 (concatD [doc (showString string)])
     ENull _ -> prPrec i 6 (concatD [doc (showString "null")])
     EInt _ n -> prPrec i 6 (concatD [prt 0 n])
     ETrue _ -> prPrec i 6 (concatD [doc (showString "true")])
@@ -226,47 +235,14 @@ instance Print (Expr a) where
                                               doc (showString "("),
                                               prt 0 exprs,
                                               doc (showString ")")])
-    EUnaryOp _ unaryop expr -> prPrec i 5 (concatD [prt 0 unaryop, prt 5 expr])
-    EMul _ expr1 mulop expr2 -> prPrec i 4 (concatD [prt 4 expr1, prt 0 mulop, prt 5 expr2])
-    EAdd _ expr1 addop expr2 -> prPrec i 3 (concatD [prt 3 expr1, prt 0 addop, prt 4 expr2])
-    ERel _ expr1 relop expr2 -> prPrec i 2 (concatD [prt 2 expr1, prt 0 relop, prt 3 expr2])
-    EAnd _ expr1 expr2 -> prPrec i 1 (concatD [prt 2 expr1, doc (showString "&&"), prt 1 expr2])
-    EOr _ expr1 expr2 -> prPrec i 0 (concatD [prt 1 expr1, doc (showString "||"), prt 0 expr2])
+    EUnaryOp _ op expr -> prPrec i 5 (concatD [ doc (showString (show op))
+                                              , prt 5 expr])
+    EBinOp _ expr1 op expr2 -> prPrec i 4 (concatD [ prt 4 expr1
+                                                   , doc (showString (show op))
+                                                   , prt 4 expr2])
     EObjNew _ cident exprs -> prPrec i 0 (concatD [doc (showString "new"), prt 0 cident, doc (showString "("), prt 0 exprs, doc (showString ")")])
     EArrNew _ type_ expr -> prPrec i 0 (concatD [doc (showString "new"), prt 0 type_, doc (showString "["), prt 0 expr, doc (showString "]")])
     ELambda _ arguments stmt -> prPrec i 0 (concatD [doc (showString "\\"), prt 0 arguments, doc (showString "->"), prt 0 stmt])
   prtList _ [] = (concatD [])
   prtList _ [x] = (concatD [prt 0 x])
   prtList _ (x:xs) = (concatD [prt 0 x, doc (showString ","), prt 0 xs])
-instance Print (UnaryOp a) where
-  prt i e = case e of
-    Neg _ -> prPrec i 0 (concatD [doc (showString "-")])
-    Not _ -> prPrec i 0 (concatD [doc (showString "!")])
-    BitNot _ -> prPrec i 0 (concatD [doc (showString "~")])
-
-instance Print (AddOp a) where
-  prt i e = case e of
-    Plus _ -> prPrec i 0 (concatD [doc (showString "+")])
-    Minus _ -> prPrec i 0 (concatD [doc (showString "-")])
-
-instance Print (MulOp a) where
-  prt i e = case e of
-    Times _ -> prPrec i 0 (concatD [doc (showString "*")])
-    Div _ -> prPrec i 0 (concatD [doc (showString "/")])
-    Mod _ -> prPrec i 0 (concatD [doc (showString "%")])
-    LShift _ -> prPrec i 0 (concatD [doc (showString "<<")])
-    RShift _ -> prPrec i 0 (concatD [doc (showString ">>")])
-    BitAnd _ -> prPrec i 0 (concatD [doc (showString "&")])
-    BitOr _ -> prPrec i 0 (concatD [doc (showString "|")])
-    BitXor _ -> prPrec i 0 (concatD [doc (showString "^")])
-
-instance Print (RelOp a) where
-  prt i e = case e of
-    LTH _ -> prPrec i 0 (concatD [doc (showString "<")])
-    LE _ -> prPrec i 0 (concatD [doc (showString "<=")])
-    GTH _ -> prPrec i 0 (concatD [doc (showString ">")])
-    GE _ -> prPrec i 0 (concatD [doc (showString ">=")])
-    EQU _ -> prPrec i 0 (concatD [doc (showString "==")])
-    NE _ -> prPrec i 0 (concatD [doc (showString "!=")])
-
-

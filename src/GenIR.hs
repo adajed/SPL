@@ -26,6 +26,7 @@ type VarEnv = M.Map VIdent (SVar, T)
 data SState = SState { tempCounter :: Int
                      , levelCounter :: Int
                      , labelCounter :: Int
+                     , stringCounter :: Int
                      , classInfo :: M.Map CIdent ClassInfo
                      , varenv :: [VarEnv]
                      , currentOutput :: [IR]
@@ -41,6 +42,7 @@ initialSState :: SState
 initialSState = SState { tempCounter  = 0
                        , levelCounter = 0
                        , labelCounter = 0
+                       , stringCounter = 0
                        , classInfo = M.empty
                        , varenv = []
                        , output = ProgramIR { textSection = M.empty, dataSection = M.empty }
@@ -65,6 +67,7 @@ runGenIR m = liftM output $ execStateT m initialSState
 sizeOf :: Type a -> Int
 sizeOf (Int _) = 4
 sizeOf (Bool _) = 1
+sizeOf (Char _) = 1
 sizeOf (Void _) = 0
 sizeOf (Array _ _) = 8
 sizeOf (Fun _ _ _) = 8
@@ -84,6 +87,13 @@ getFreshLabel = do
     i <- gets labelCounter
     modify (\s -> s { labelCounter = i + 1 } )
     return $ VIdent $ ".L" ++ show i
+
+--
+getFreshStringLabel :: GenIR VIdent
+getFreshStringLabel = do
+    i <- gets stringCounter
+    modify (\s -> s { stringCounter = i + 1 })
+    return $ VIdent $ "__string_" ++ show i
 
 -- push new variable env on the stack
 pushEmptyEnv :: GenIR ()

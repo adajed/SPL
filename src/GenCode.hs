@@ -6,9 +6,10 @@ import qualified Data.List as L
 
 import AbsSPL
 import BasicBlock
-import GraphColoring ( colorBBGraph )
+import GraphColoring ( allocateRegisters )
 import CodeM
 import IR
+import Operator
 import Token
 
 import Control.Monad.Trans.State
@@ -102,12 +103,12 @@ stackOffset n = do
 
 -- generate code
 
-genCode :: BBGraph -> [Code]
-genCode g = execGenCode (genBBGraph g)
+genCode :: Bool -> BBGraph -> [Code]
+genCode allocRegisters g = execGenCode (genBBGraph allocRegisters g)
 
-genBBGraph :: BBGraph -> GenCode ()
-genBBGraph g = do
-    let (g', regAlloc) = colorBBGraph g
+genBBGraph :: Bool -> BBGraph -> GenCode ()
+genBBGraph allocRegisters g = do
+    let (g', regAlloc) = allocateRegisters allocRegisters g
     setRegisterAllocation regAlloc
     let inds = flattenBBGraph g'
     let bbs = map ((ids g') M.!) inds
