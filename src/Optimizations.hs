@@ -10,6 +10,7 @@ import ConstantFolding
 import CopyPropagation
 import DeadCodeElimination
 import GlobalCommonSubexpressionElimination
+import LayoutOptimization ( layoutOptimization )
 import LocalCommonSubexpressionElimination
 import InlineFunctions ( inlineFunctions )
 import RemoveNop
@@ -37,7 +38,8 @@ basicOptimize options = iterateUntilFixpoint (Map.map opts)
 
 optimize :: OptimizationOptions -> Map VIdent BBGraph -> Map VIdent BBGraph
 optimize options = iterateUntilFixpoint opts
-    where opts = (if doInlineFunctions options then inlineFunctions else id)
+    where opts = (Map.map layoutOptimization)
+               . (if doInlineFunctions options then inlineFunctions else id)
                . (Map.mapWithKey unreachableCodeElimination)
                . (Map.map (optimizeBBGraph options))
 

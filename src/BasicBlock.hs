@@ -70,33 +70,31 @@ isJump xs = case last xs of
               _ -> False
 
 
--- getMissingJump_ :: BBGraph -> Int -> [Int]
--- getMissingJump_ bbgraph i =
---     let code = bbCode ((ids bbgraph) M.! i)
---      in case code of
---           [] -> (next bbgraph) M.! i
---           _ -> case last code of
---                  IR_Return _ -> []
---                  IR_VoidReturn -> []
---                  IR_Jump _ -> []
---                  IR_CondJump _ _ _ label ->
---                      let j = fst (head (filter ((==label) . bbLabel . snd) (M.assocs (ids bbgraph))))
---                       in filter (not . (==j)) ((next bbgraph) M.! i)
---                  _ -> (next bbgraph) M.! i
+getMissingJump_ :: BBGraph -> Int -> [Int]
+getMissingJump_ bbgraph i =
+    let code = bbCode ((ids bbgraph) M.! i)
+     in case code of
+          [] -> (next bbgraph) M.! i
+          _ -> case last code of
+                 IR_Return _ -> []
+                 IR_VoidReturn -> []
+                 IR_Jump _ -> []
+                 IR_CondJump _ _ _ _ _ -> []
+                 _ -> (next bbgraph) M.! i
 
--- fixJumps :: BBGraph -> BBGraph
--- fixJumps bbgraph = bbgraph { ids = ids' }
---     where xs = M.fromList (map (\i -> (i, getMissingJump_ bbgraph i)) (M.keys (ids bbgraph)))
---           f i bb = bb { bbCode = (bbCode bb) ++ (map (\j -> IR_Jump (bbLabel ((ids bbgraph) M.! j))) (xs M.! i)) }
---           ids' = M.mapWithKey f (ids bbgraph)
-
-
--- buildBBGraph :: VIdent -> [BasicBlock] -> BBGraph
--- buildBBGraph fName bbs = fixJumps (buildBBGraph_ fName bbs)
+fixJumps :: BBGraph -> BBGraph
+fixJumps bbgraph = bbgraph { ids = ids' }
+    where xs = M.fromList (map (\i -> (i, getMissingJump_ bbgraph i)) (M.keys (ids bbgraph)))
+          f i bb = bb { bbCode = (bbCode bb) ++ (map (\j -> IR_Jump (bbLabel ((ids bbgraph) M.! j))) (xs M.! i)) }
+          ids' = M.mapWithKey f (ids bbgraph)
 
 
 buildBBGraph :: VIdent -> [BasicBlock] -> BBGraph
-buildBBGraph fName bbs = G { ids = ids', next = next', prev = prev', layout = layout', args = args', start = start', end = end' }
+buildBBGraph fName bbs = fixJumps (buildBBGraph_ fName bbs)
+
+
+buildBBGraph_ :: VIdent -> [BasicBlock] -> BBGraph
+buildBBGraph_ fName bbs = G { ids = ids', next = next', prev = prev', layout = layout', args = args', start = start', end = end' }
     where startIdent = VIdent ".__START__"
           bbs' = map (\(BB name xs) -> BB (if name == fName then startIdent else name) xs) bbs
           ids' = M.fromList (zip [1..] bbs')
