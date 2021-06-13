@@ -18,7 +18,7 @@ import Control.Monad.Identity
 liftJoin2 :: Monad m => (a -> b -> m c) -> m a -> m b -> m c
 liftJoin2 f ma mb = join (liftM2 f ma mb)
 
-data SState = SState { code          :: [Code]
+data SState = SState { assemblerCode :: [AssemblerInstr]
                      , varAddress    :: M.Map SVar Int
                      , regAllocation :: M.Map SVar Val
                      , offset        :: Int
@@ -28,9 +28,9 @@ data SState = SState { code          :: [Code]
 
 type GenCode = StateT SState Identity
 
-execGenCode :: GenCode a -> [Code]
-execGenCode m = reverse (code (runIdentity (execStateT m state)))
-    where state = SState { code = []
+execGenCode :: GenCode a -> [AssemblerInstr]
+execGenCode m = reverse (assemblerCode (runIdentity (execStateT m state)))
+    where state = SState { assemblerCode = []
                          , varAddress = M.empty
                          , regAllocation = M.empty
                          , offset = 0
@@ -38,8 +38,8 @@ execGenCode m = reverse (code (runIdentity (execStateT m state)))
                          , useRbp = False
                          }
 
-emit :: Code -> GenCode ()
-emit c = modify (\s -> s { code = c:(code s) } )
+emit :: AssemblerInstr -> GenCode ()
+emit c = modify (\s -> s { assemblerCode = c:(assemblerCode s) } )
 
 intToSize :: Int -> Size
 intToSize 0 = DWord
@@ -72,7 +72,7 @@ getAddress x@(SVar _ s) = do
              else do
                   o <- gets offset
                   return (VMem sp (o-n) size)
-      Nothing -> fail ("Cannot find var " ++ show x)
+      Nothing -> fail ("b: Cannot find var " ++ show x)
 
 getSpilledVars :: BBGraph -> S.Set SVar
 getSpilledVars g = S.unions (map go (M.elems (ids g)))
@@ -103,14 +103,14 @@ stackOffset n = do
 
 -- generate code
 
-genCode :: Bool -> BBGraph -> [Code]
+genCode :: Bool -> BBGraph -> [AssemblerInstr]
 genCode allocRegisters g = execGenCode (genBBGraph allocRegisters g)
 
 genBBGraph :: Bool -> BBGraph -> GenCode ()
 genBBGraph allocRegisters g = do
     let (g', regAlloc) = allocateRegisters allocRegisters g
     setRegisterAllocation regAlloc
-    let inds = flattenBBGraph g'
+    let inds = layout g'
     let bbs = map ((ids g') M.!) inds
     mapM_ allocVarOnStack (getSpilledVars g')
     n <- gets offset
@@ -125,7 +125,8 @@ genBBGraph allocRegisters g = do
     let usedCallerSaveRegs = S.filter (`elem` callerSaveRegs) (S.fromList (M.elems regAlloc))
     mapM_ (push . (`VReg` QWord)) usedCallerSaveRegs
     foldM_ declareArgFromStack (0, 7) (drop 6 (args g'))
-    mapM_ genBasicBlock bbs
+    genBasicBlockStart (head bbs)
+    mapM_ genBasicBlock (tail bbs)
 
 moveArgToReg :: SVar -> Val -> GenCode ()
 moveArgToReg v@(SVar (VarA n) s) r =
@@ -137,14 +138,16 @@ moveArgToReg v@(SVar (VarA n) s) r =
             addr <- getAddress v
             move r addr
 
-genBasicBlock :: BasicBlock -> GenCode ()
-genBasicBlock (BB (VIdent ".__START__") xs) = do
+genBasicBlockStart :: BasicBlock -> GenCode ()
+genBasicBlockStart bb = do
     allocs <- gets regAllocation
     let isArg (SVar (VarA _) _) _ = True
         isArg _ _ = False
     let argVars = M.filterWithKey isArg allocs
     mapM_ (uncurry moveArgToReg) (M.toList argVars)
-    mapM_ genIR xs
+    genBasicBlock bb
+
+genBasicBlock :: BasicBlock -> GenCode ()
 genBasicBlock (BB label xs) = do
     emit (CLabel (VLabel label))
     mapM_ genIR xs
@@ -198,7 +201,7 @@ setSize :: Size -> Val -> Val
 setSize size (VReg r _) = VReg r size
 setSize size (VInt n _) = VInt n size
 
-genIR_BinOp :: (Val -> Val -> Code) -> SVar -> ValIR -> ValIR -> GenCode ()
+genIR_BinOp :: (Val -> Val -> AssemblerInstr) -> SVar -> ValIR -> ValIR -> GenCode ()
 genIR_BinOp f y v1 v2 = do
     r_y <- getReg y
     r_v1 <- toVal v1
@@ -211,7 +214,7 @@ genIR_BinOp f y v1 v2 = do
          move r_y r_v1
          emit (f r_y r_v2)
 
-genIR_UnOp :: (Val -> Code) -> SVar -> ValIR -> GenCode ()
+genIR_UnOp :: (Val -> AssemblerInstr) -> SVar -> ValIR -> GenCode ()
 genIR_UnOp f y v = do
     liftJoin2 move (getReg y) (toVal v)
     emit =<< liftM f (getReg y)
@@ -401,9 +404,10 @@ genIR (IR_VoidCall f xs) = do
 genIR (IR_Jump label) = emit (CJump (VLabel label))
 
 -- conditional jump
-genIR (IR_CondJump v1 op v2 label) = do
+genIR (IR_CondJump v1 op v2 label1 label2) = do
     emit =<< liftM2 CCmp (toVal v1) (toVal v2)
-    emit (CCondJump op (VLabel label))
+    emit (CCondJump op (VLabel label1))
+    emit (CJump (VLabel label2))
 
 -- return
 genIR (IR_Return v) = do

@@ -9,7 +9,7 @@ lib/runtime.o: lib/runtime.asm
 	nasm -felf64 -o lib/runtime.o lib/runtime.asm
 
 spl: $(SRC)
-	stack build
+	stack build #--trace --no-strip --profile
 	rm -f spl
 	ln -s ./.stack-work/dist/x86_64-linux/Cabal-2.4.0.1/build/spl/spl spl
 

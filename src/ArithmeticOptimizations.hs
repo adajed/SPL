@@ -87,16 +87,16 @@ binOp ir@(IR_BinOp BXor x v1 v2) =
 binOp ir = ir
 
 condJump :: IR -> IR
-condJump ir@(IR_CondJump v1 Less v2 label) =
-    if v1 == v2 then IR_Nop else ir
-condJump ir@(IR_CondJump v1 LessEq v2 label) =
-    if v1 == v2 then IR_Jump label else ir
-condJump ir@(IR_CondJump v1 Greater v2 label) =
-    if v1 == v2 then IR_Nop else ir
-condJump ir@(IR_CondJump v1 GreaterEq v2 label) =
-    if v1 == v2 then IR_Jump label else ir
-condJump ir@(IR_CondJump v1 NotEqual v2 label) =
-    if v1 == v2 then IR_Nop else ir
-condJump ir@(IR_CondJump v1 Equal v2 label) =
-    if v1 == v2 then IR_Jump label else ir
+condJump ir@(IR_CondJump v1 Less v2 label1 label2) =
+    if v1 == v2 then IR_Jump label2 else ir
+condJump ir@(IR_CondJump v1 LessEq v2 label1 label2) =
+    if v1 == v2 then IR_Jump label1 else ir
+condJump ir@(IR_CondJump v1 Greater v2 label1 label2) =
+    if v1 == v2 then IR_Jump label2 else ir
+condJump ir@(IR_CondJump v1 GreaterEq v2 label1 label2) =
+    if v1 == v2 then IR_Jump label1 else ir
+condJump ir@(IR_CondJump v1 NotEqual v2 label1 label2) =
+    if v1 == v2 then IR_Jump label2 else ir
+condJump ir@(IR_CondJump v1 Equal v2 label1 label2) =
+    if v1 == v2 then IR_Jump label1 else ir
 condJump ir = ir

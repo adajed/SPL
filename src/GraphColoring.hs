@@ -67,7 +67,7 @@ getAllVarsBBGraph g = S.unions (map getAllVarsBB (M.elems (ids g)))
           getAllVarsIR (IR_Return v) = getVarsIR [v]
           getAllVarsIR (IR_VoidReturn) = S.empty
           getAllVarsIR (IR_Jump _) = S.empty
-          getAllVarsIR (IR_CondJump v1 _ v2 _) = getVarsIR [v1, v2]
+          getAllVarsIR (IR_CondJump v1 _ v2 _ _) = getVarsIR [v1, v2]
           getAllVarsIR (IR_Nop) = S.empty
           getAllVarsIR (IR_Argument x) = getVarsIR [VarIR x]
           getAllVarsIR (IR_Store x) = getVarsIR [VarIR x]
@@ -247,15 +247,15 @@ spill g cols = foldl spillVar g varsToSpill
 
 spillVar :: BBGraph -> Node -> BBGraph
 spillVar g (NVar x@(SVar (VarA n) _)) = g { ids = ids' }
-    where ids' = M.map f (ids g)
-          f (BB (VIdent ".__START__") xs) = BB (VIdent ".__START__") c
-            where c = if n < 7
-                         then [IR_Store x] ++ (concat (map (spillIR x) xs))
-                         else concat (map (spillIR x) xs)
-          f (BB name xs) = BB name (concat (map (spillIR x) xs))
+    where ids' = M.mapWithKey f (ids g)
+          f :: Int -> BasicBlock -> BasicBlock
+          f idx bb = bb { bbCode = code }
+              where code = if idx == start g && n < 7
+                              then [IR_Store x] ++ (concat (map (spillIR x) (bbCode bb)))
+                              else concat (map (spillIR x) (bbCode bb))
 spillVar g (NVar x) = g { ids = ids' }
     where ids' = M.map f (ids g)
-          f (BB name xs) = BB name (concat (map (spillIR x) xs))
+          f bb = bb { bbCode = concat (map (spillIR x) (bbCode bb)) }
 spillVar g _ = g
 
 spillIR :: SVar -> IR -> [IR]

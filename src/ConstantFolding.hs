@@ -16,9 +16,11 @@ constantFold (IR_BinOp op x (IntIR n1 s1) (IntIR n2 s2)) =
     IR_Ass x (IntIR (calcBinOp op n1 n2) (max s1 s2))
 constantFold (IR_UnOp op x (IntIR n s)) =
     IR_Ass x (IntIR (calcUnOp op n) s)
-constantFold ir@(IR_CondJump v1 Equal v2 label) = if v1 == v2 then IR_Jump label else ir
-constantFold (IR_CondJump (IntIR n1 _) op (IntIR n2 _) label) =
-    if calcIRelOp op n1 n2 then IR_Jump label else IR_Nop
+constantFold (IR_CondJump (IntIR n1 _) Equal (IntIR n2 _) label1 label2) =
+    if n1 == n2 then IR_Jump label1 else IR_Jump label2
+constantFold ir@(IR_CondJump v1 Equal v2 label1 label2) = if v1 == v2 then IR_Jump label1 else ir
+constantFold (IR_CondJump (IntIR n1 _) op (IntIR n2 _) label1 label2) =
+    if calcIRelOp op n1 n2 then IR_Jump label1 else IR_Jump label2
 constantFold ir = ir
 
 intToBool :: Int -> Bool
