@@ -61,7 +61,7 @@ uses v ir =
       IR_Return v'          -> v == v'
       IR_VoidReturn         -> False
       IR_Jump _             -> False
-      IR_CondJump v1 _ v2 _ -> v1 == v || v2 == v
+      IR_CondJump v1 _ v2 _ _ -> v1 == v || v2 == v
       IR_Phi _ vs           -> any ((==v) . snd) vs
       IR_Nop                -> False
 

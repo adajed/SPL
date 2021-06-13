@@ -4,6 +4,7 @@ import qualified Data.Map as M
 
 import BasicBlock
 import IR
+import Token ( VIdent(..) )
 
 type Ind a = (Int, a)
 
@@ -16,12 +17,12 @@ modifyValue f ir =
       IR_UnOp op x v -> IR_UnOp op x (f v)
       IR_MemRead x v -> IR_MemRead x (f v)
       IR_MemSave v1 v2 size -> IR_MemSave (f v1) (f v2) size
-      IR_Call x v xs -> IR_Call x (f v) (fmap f xs)
-      IR_VoidCall v xs -> IR_VoidCall (f v) (fmap f xs)
+      IR_Call x v vs -> IR_Call x (f v) (fmap f vs)
+      IR_VoidCall v vs -> IR_VoidCall (f v) (fmap f vs)
       IR_Return v -> IR_Return (f v)
       IR_VoidReturn -> IR_VoidReturn
       IR_Jump l -> IR_Jump l
-      IR_CondJump v1 op v2 l -> IR_CondJump (f v1) op (f v2) l
+      IR_CondJump v1 op v2 l1 l2 -> IR_CondJump (f v1) op (f v2) l1 l2
       IR_Phi x vs -> IR_Phi x (map (\(n,v) -> (n, f v)) vs)
 
 modifyVar :: (SVar -> SVar) -> IR -> IR
@@ -34,6 +35,21 @@ modifyVar f ir =
       IR_Call x v vs -> IR_Call (f x) v vs
       IR_Phi x vs -> IR_Phi (f x) vs
       ir' -> ir'
+
+modifyLabel :: (VIdent -> VIdent) -> IR -> IR
+modifyLabel f ir =
+    case ir of
+      IR_Label label -> IR_Label (f label)
+      IR_Jump label -> IR_Jump (f label)
+      IR_CondJump v1 op v2 label1 label2 -> IR_CondJump v1 op v2 (f label1) (f label2)
+      ir' -> ir'
+
+litfToSVar :: (Var -> Var) -> SVar -> SVar
+litfToSVar f (SVar var size) = SVar (f var) size
+
+liftToValIR :: (Var -> Var) -> ValIR -> ValIR
+liftToValIR f (VarIR sVar) = VarIR (litfToSVar f sVar)
+liftToValIR f val = val
 
 takeVar :: IR -> Maybe SVar
 takeVar (IR_Ass x _) = Just x
@@ -60,7 +76,8 @@ getAllVars (IR_VoidCall f xs) = maybeVar f ++ concat (map maybeVar xs)
 getAllVars (IR_Return v) = maybeVar v
 getAllVars (IR_VoidReturn) = []
 getAllVars (IR_Jump _) = []
-getAllVars (IR_CondJump v1 _ v2 _) = maybeVar v1 ++ maybeVar v2
+getAllVars (IR_CondJump v1 _ v2 _ _) = maybeVar v1 ++ maybeVar v2
+getAllVars (IR_Phi x vs) = x:(concat (map (maybeVar . snd) vs))
 getAllVars (IR_Nop) = []
 getAllVars (IR_Argument x) = []
 getAllVars (IR_Store x) = [x]

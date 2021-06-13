@@ -65,6 +65,6 @@ insertAtTheEnd i ir g = g { ids = M.adjust f i (ids g) }
     where f (BB name []) = BB name [ir]
           f (BB name xs) = case last xs of
                              IR_Jump l -> BB name ((init xs) ++ [ir, IR_Jump l])
-                             IR_CondJump v1 op v2 l -> BB name ((init xs) ++ [ir, IR_CondJump v1 op v2 l])
+                             IR_CondJump v1 op v2 l1 l2 -> BB name ((init xs) ++ [ir, IR_CondJump v1 op v2 l1 l2])
                              _ -> BB name (xs ++ [ir])
 

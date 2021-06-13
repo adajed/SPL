@@ -164,22 +164,29 @@ releaseObject t@(Class _ cls) x =
     if isLambdaEnv cls
        then return ()
        else do
-               l <- getFreshLabel
-               emitIR (IR_CondJump x Equal (IntIR 0 8) l)
+               lNull <- getFreshLabel
+               lNotNull <- getFreshLabel
+               emitIR (IR_CondJump x Equal (IntIR 0 8) lNull lNotNull)
+               emitIR (IR_Label lNotNull)
                f <- getField x 12 8
                emitIR (IR_VoidCall f [x])
-               emitIR (IR_Label l)
+               emitIR (IR_Label lNull)
 releaseObject t@(Array _ ty) x = do
-    l <- getFreshLabel
-    emitIR (IR_CondJump x Equal (IntIR 0 8) l)
+    lNull <- getFreshLabel
+    lNotNull <- getFreshLabel
+    lFree <- getFreshLabel
+    emitIR (IR_CondJump x Equal (IntIR 0 8) lNull lNotNull)
+    emitIR (IR_Label lNotNull)
     refcnt <- decreaseRefCount x
-    emitIR (IR_CondJump refcnt NotEqual (IntIR 0 4) l)
+    emitIR (IR_CondJump refcnt NotEqual (IntIR 0 4) lNull lFree)
+    emitIR (IR_Label lFree)
     when (isFreeable ty) (do
             arr <- add x (IntIR 8 8) 8
             size <- memread 4 =<< add x (IntIR 4 8) 8
             i <- emitIR_ToTemp 4 (\t -> IR_Ass t (IntIR 0 4))
             l1 <- getFreshLabel
             l2 <- getFreshLabel
+            l3 <- getFreshLabel
             emitIR (IR_Jump l2)
             emitIR (IR_Label l1)
             pos <- mul (VarIR i) (IntIR (sizeOf ty) 4) 4
@@ -189,42 +196,52 @@ releaseObject t@(Array _ ty) x = do
             i' <- add (VarIR i) (IntIR 1 4) 4
             emitIR (IR_Ass i i')
             emitIR (IR_Label l2)
-            emitIR (IR_CondJump (VarIR i) Less size l1)
+            emitIR (IR_CondJump (VarIR i) Less size l1 l3)
+            emitIR (IR_Label l3)
                          )
     emitIR (IR_VoidCall (LabelIR (VIdent "freeMemory")) [x])
-    emitIR (IR_Label l)
+    emitIR (IR_Label lNull)
 releaseObject t@(Fun _ _ _) x = do
-    l <- getFreshLabel
-    emitIR (IR_CondJump x Equal (IntIR 0 8) l)
+    lNull <- getFreshLabel
+    lNotNull <- getFreshLabel
+    lFree <- getFreshLabel
+    emitIR (IR_CondJump x Equal (IntIR 0 8) lNull lNotNull)
+    emitIR (IR_Label lNotNull)
     refcnt <- decreaseRefCount x
-    emitIR (IR_CondJump refcnt NotEqual (IntIR 0 4) l)
+    emitIR (IR_CondJump refcnt NotEqual (IntIR 0 4) lNull lFree)
+    emitIR (IR_Label lFree)
     f <- memread 8 =<< add x (IntIR 20 8) 8
     c <- memread 8 =<< add x (IntIR 12 8) 8
     emitIR (IR_VoidCall f [c])
     emitIR (IR_VoidCall (LabelIR (VIdent "freeMemory")) [x])
-    emitIR (IR_Label l)
+    emitIR (IR_Label lNull)
+
 
 acquireObject :: T -> ValIR -> GenIR ()
 acquireObject (Int ()) _ = return ()
 acquireObject (Bool ()) _ = return ()
 acquireObject (Null ()) _ = return ()
 acquireObject t x = do
-    l <- getFreshLabel
-    emitIR (IR_CondJump x Equal (IntIR 0 8) l)
+    lNull <- getFreshLabel
+    lNotNull <- getFreshLabel
+    emitIR (IR_CondJump x Equal (IntIR 0 8) lNull lNotNull)
+    emitIR (IR_Label lNotNull)
     cnt <- memread 4 x
     newcnt <- add cnt (IntIR 1 4) 4
     emitIR (IR_MemSave x newcnt 4)
-    emitIR (IR_Label l)
+    emitIR (IR_Label lNull)
 
 decrementRefCount :: T -> ValIR -> GenIR ()
 decrementRefCount (Int ()) _ = return ()
 decrementRefCount (Bool ()) _ = return ()
 decrementRefCount (Null ()) _ = return ()
 decrementRefCount t x = do
-    l <- getFreshLabel
-    emitIR (IR_CondJump x Equal (IntIR 0 8) l)
+    lNull <- getFreshLabel
+    lNotNull <- getFreshLabel
+    emitIR (IR_CondJump x Equal (IntIR 0 8) lNull lNotNull)
+    emitIR (IR_Label lNotNull)
     decreaseRefCount x
-    emitIR (IR_Label l)
+    emitIR (IR_Label lNull)
 
 
 generateIR_Destructor :: CIdent -> GenIR ()
@@ -237,19 +254,23 @@ generateIR_Destructor cls = do
     var <- declareVar (classT cls) varName
     let x = VarIR var
     emitIR (IR_Argument var)
-    l <- getFreshLabel
-    emitIR (IR_CondJump x NotEqual (IntIR 0 8) l)
+    lNotNull <- getFreshLabel
+    lNull <- getFreshLabel
+    emitIR (IR_CondJump x NotEqual (IntIR 0 8) lNotNull lNull)
+    emitIR (IR_Label lNull)
     emitIR IR_VoidReturn
-    emitIR (IR_Label l)
+    emitIR (IR_Label lNotNull)
     unless (isLambdaEnv cls)
         (do
          cnt <- memread 4 x
          newcnt <- sub cnt (IntIR 1 4) 4
          emitIR (IR_MemSave x newcnt 4)
-         l <- getFreshLabel
-         emitIR (IR_CondJump newcnt Equal (IntIR 0 4) l)
+         l1 <- getFreshLabel
+         l2 <- getFreshLabel
+         emitIR (IR_CondJump newcnt Equal (IntIR 0 4) l1 l2)
+         emitIR (IR_Label l2)
          emitIR IR_VoidReturn
-         emitIR (IR_Label l)
+         emitIR (IR_Label l1)
         )
     info <- liftM (!!! cls) $ gets classInfo
     mapM_ (freeField info x) (getAllFields info)
@@ -363,6 +384,7 @@ generateIR_Stmt (While _ expr stmt) = do
 generateIR_Stmt (ForUp _ name exprS exprE exprI stmt) = do
     lLoop <- getFreshLabel
     lEnd <- getFreshLabel
+    lFinish <- getFreshLabel
     valS <- generateIR_Expr exprS
     valE <- generateIR_Expr exprE
     valI <- generateIR_Expr exprI
@@ -376,10 +398,12 @@ generateIR_Stmt (ForUp _ name exprS exprE exprI stmt) = do
     emitIR (IR_Ass i temp)
     void popEnv
     emitIR (IR_Label lEnd)
-    emitIR (IR_CondJump (VarIR i) Less valE lLoop)
+    emitIR (IR_CondJump (VarIR i) Less valE lLoop lFinish)
+    emitIR (IR_Label lFinish)
 generateIR_Stmt (ForDown _ name exprS exprE exprI stmt) = do
     lLoop <- getFreshLabel
     lEnd <- getFreshLabel
+    lFinish <- getFreshLabel
     valS <- generateIR_Expr exprS
     valE <- generateIR_Expr exprE
     valI <- generateIR_Expr exprI
@@ -393,10 +417,12 @@ generateIR_Stmt (ForDown _ name exprS exprE exprI stmt) = do
     emitIR (IR_Ass i temp)
     void popEnv
     emitIR (IR_Label lEnd)
-    emitIR (IR_CondJump (VarIR i) Greater valE lLoop)
+    emitIR (IR_CondJump (VarIR i) Greater valE lLoop lFinish)
+    emitIR (IR_Label lFinish)
 generateIR_Stmt (ForEach _ name expr stmt) = do
     lLoop <- getFreshLabel
     lEnd <- getFreshLabel
+    lFinish <- getFreshLabel
     let (Array _ ty) = exprType expr
     arr <- generateIR_Expr expr
     size <- getField arr 4 4
@@ -414,7 +440,8 @@ generateIR_Stmt (ForEach _ name expr stmt) = do
     emitIR (IR_Ass i temp)
     void popEnv
     emitIR (IR_Label lEnd)
-    emitIR (IR_CondJump (VarIR i) Less size lLoop)
+    emitIR (IR_CondJump (VarIR i) Less size lLoop lFinish)
+    emitIR (IR_Label lFinish)
 generateIR_Stmt (SExp _ expr) = do
     value <- generateIR_Expr expr
     return ()
@@ -529,6 +556,7 @@ generateIR_Expr (EArrNew tt t expr) = do
     p' <- add ptr (IntIR 8 8) 8
     lLoop <- getFreshLabel
     lEnd <- getFreshLabel
+    lFinish <- getFreshLabel
     emitIR (IR_Jump lEnd)
     emitIR (IR_Label lLoop)
     p1 <- mul (VarIR i) (IntIR n 4) 4
@@ -537,7 +565,8 @@ generateIR_Expr (EArrNew tt t expr) = do
     i' <- add (VarIR i) (IntIR 1 4) 4
     emitIR (IR_Ass i i')
     emitIR (IR_Label lEnd)
-    emitIR (IR_CondJump (VarIR i) Less v1 lLoop)
+    emitIR (IR_CondJump (VarIR i) Less v1 lLoop lFinish)
+    emitIR (IR_Label lFinish)
     return ptr
 generateIR_Expr e@(ELambda ty args stmt) = do
     lambdaN <- gets lambdaCounter
@@ -682,8 +711,7 @@ generateIR_JumpExpr (EBinOp _ e1 Or e2) lTrue lFalse = do
 generateIR_JumpExpr (EBinOp _ e1 op e2) lTrue lFalse = do
     v1 <- generateIR_Expr e1
     v2 <- generateIR_Expr e2
-    emitIR (IR_CondJump v1 op v2 lTrue)
-    emitIR (IR_Jump lFalse)
+    emitIR (IR_CondJump v1 op v2 lTrue lFalse)
 generateIR_JumpExpr expr lTrue lFalse = generateIR_JumpExpr expr' lTrue lFalse
     where expr' = EBinOp boolT expr Equal (ETrue boolT)
 

@@ -42,7 +42,7 @@ getVarCounter var = do
     m <- gets lastVar
     case m M.!? var of
       Just i -> return i
-      Nothing -> fail ("Cannot find var " ++ show var)
+      Nothing -> fail ("d: Cannot find var " ++ show var)
 
 incVarCounter :: Var -> SSA ()
 incVarCounter var = do
@@ -78,7 +78,7 @@ moveArgsToStart g = g''
           removeArgs (BB name xs) = BB name (filter (not . isArg) xs)
           insertArgs (BB name xs) = BB name (newargs ++ xs)
           g' = g { ids = M.map removeArgs (ids g) }
-          g'' = g' { ids = M.adjust insertArgs 1 (ids g') }
+          g'' = g' { ids = M.adjust insertArgs (start g') (ids g') }
 
 getVar :: IR -> Maybe SVar
 getVar (IR_Ass x _) = Just x
@@ -92,7 +92,7 @@ getC :: M.Map Int (M.Map Var Int) -> Int -> Var -> SSA (Int, Var)
 getC m i v = do
     x <- liftM (M.! v) $ gets varMap
     unless (M.member i m) (fail "Cannot find i")
-    unless (M.member x (m M.! i)) (fail ("Cannot find var " ++ show x))
+    unless (M.member x (m M.! i)) (fail ("a: Cannot find var " ++ show x))
     let n = (m M.! i) M.! x
     return (i, VarT n)
 
@@ -163,10 +163,10 @@ irToSSA (IR_VoidCall f xs) = do
     xs' <- mapM valueToSSA xs
     return (IR_VoidCall f' xs')
 irToSSA (IR_Jump l) = return (IR_Jump l)
-irToSSA (IR_CondJump v1 op v2 label) = do
+irToSSA (IR_CondJump v1 op v2 label1 label2) = do
     v1' <- valueToSSA v1
     v2' <- valueToSSA v2
-    return (IR_CondJump v1' op v2' label)
+    return (IR_CondJump v1' op v2' label1 label2)
 irToSSA (IR_Return v) = do
     v' <- valueToSSA v
     return (IR_Return v')
@@ -180,7 +180,7 @@ valueToSSA (VarIR (SVar var size)) = do
     m <- liftM (M.!? var) $ gets lastVar
     case m of
       Just i -> return (VarIR (SVar (VarT i) size))
-      Nothing -> fail $ "Cannot find var: " ++ show var
+      Nothing -> fail $ "c: Cannot find var: " ++ show var
 valueToSSA v = return v
 
 varToSSA :: SVar -> SSA SVar

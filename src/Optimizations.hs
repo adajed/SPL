@@ -11,6 +11,7 @@ import CopyPropagation
 import DeadCodeElimination
 import GlobalCommonSubexpressionElimination
 import LocalCommonSubexpressionElimination
+import InlineFunctions ( inlineFunctions )
 import RemoveNop
 import RemoveVoidVariables
 import Token
@@ -23,6 +24,7 @@ data OptimizationOptions = OptimizationOptions { doConstantFolding :: Bool
                                                , doDeadCodeElimination :: Bool
                                                , doCommonSubexpressionElimination :: Bool
                                                , doRegisterAllocation :: Bool
+                                               , doInlineFunctions :: Bool
                                                }
 
 basicOptimize :: OptimizationOptions -> Map VIdent BBGraph -> Map VIdent BBGraph
@@ -35,7 +37,8 @@ basicOptimize options = iterateUntilFixpoint (Map.map opts)
 
 optimize :: OptimizationOptions -> Map VIdent BBGraph -> Map VIdent BBGraph
 optimize options = iterateUntilFixpoint opts
-    where opts = (Map.mapWithKey unreachableCodeElimination)
+    where opts = (if doInlineFunctions options then inlineFunctions else id)
+               . (Map.mapWithKey unreachableCodeElimination)
                . (Map.map (optimizeBBGraph options))
 
 optimizeBBGraph :: OptimizationOptions -> BBGraph -> BBGraph

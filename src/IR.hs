@@ -81,7 +81,7 @@ data IR = IR_Label VIdent                    -- label
         | IR_Return ValIR                   -- return value from function
         | IR_VoidReturn
         | IR_Jump VIdent
-        | IR_CondJump ValIR Operator ValIR VIdent
+        | IR_CondJump ValIR Operator ValIR VIdent VIdent
         | IR_Phi SVar [(Int, ValIR)]       -- phi function (for SSA)
         | IR_Nop                          -- no op
         | IR_Argument SVar                 -- argument from function
@@ -101,7 +101,7 @@ instance Show IR where
                 IR_Return v             -> c ["return", show v]
                 IR_VoidReturn           -> c ["return"]
                 IR_Jump l               -> c ["jump", show l]
-                IR_CondJump v1 op v2 l  -> c ["if", show v1, show op, show v2, "jump", show l]
+                IR_CondJump v1 op v2 l lElse  -> c ["if", show v1, show op, show v2, "jump", show l, "else", show lElse]
                 IR_Phi x vs             -> c [show x, "=", "phi", show vs]
                 IR_Nop                  -> c ["nop"]
                 IR_Argument x           -> c ["arg", "(", show x, ")"]

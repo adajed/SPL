@@ -122,7 +122,8 @@ rbp, rsp :: Val
 rbp = VReg bp QWord
 rsp = VReg sp QWord
 
-data Code = CAdd Val Val    -- add
+data AssemblerInstr =
+            CAdd Val Val    -- add
           | CBitAnd Val Val -- bitwise and
           | CCall Val       -- call
           | CCdq            -- cdq (for division)
@@ -149,8 +150,8 @@ data Code = CAdd Val Val    -- add
           | CLeave
           | CRet               -- return
           deriving (Eq)
-instance Show Code where
-    show code = case code of
+instance Show AssemblerInstr where
+    show instr = case instr of
                   CAdd a b              -> c ["add", show a, ",", show b]
                   CBitAnd a b           -> c ["and", show a, ",", show b]
                   CCall a               -> c ["call", show a]

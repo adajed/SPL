@@ -60,7 +60,7 @@ uses (IR_MemSave v1 v2 _) = S.unions (map getVar [v1, v2])
 uses (IR_Call _ v xs) = S.unions ((getVar v):(map getVar xs))
 uses (IR_VoidCall v xs) = S.unions ((getVar v):(map getVar xs))
 uses (IR_Return v) = getVar v
-uses (IR_CondJump v1 _ v2 _) = S.unions (map getVar [v1, v2])
+uses (IR_CondJump v1 _ v2 _ _) = S.unions (map getVar [v1, v2])
 uses (IR_Store x) = S.singleton x
 uses _ = S.empty
 

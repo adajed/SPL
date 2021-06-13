@@ -12,3 +12,15 @@ src/DocSPL.txt
 
 .gdb_history
 
+tests/**
+!tests/good/
+!tests/good/basic/
+!tests/good/array/
+!tests/good/class/
+!tests/good/lambda/
+!tests/good/struct/
+!tests/bad/
+!tests/bad/basic/
+!tests/bad/array/
+!tests/**/*.spl
+!tests/**/*.out

@@ -22,6 +22,7 @@ options0 = OptimizationOptions { doConstantFolding = False
                                , doDeadCodeElimination = False
                                , doCommonSubexpressionElimination = False
                                , doRegisterAllocation = False
+                               , doInlineFunctions = False
                                }
 
 options1 :: OptimizationOptions
@@ -31,6 +32,7 @@ options1 = OptimizationOptions { doConstantFolding = True
                                , doDeadCodeElimination = True
                                , doCommonSubexpressionElimination = False
                                , doRegisterAllocation = True
+                               , doInlineFunctions = False
                                }
 options2 :: OptimizationOptions
 options2 = OptimizationOptions { doConstantFolding = True
@@ -39,6 +41,7 @@ options2 = OptimizationOptions { doConstantFolding = True
                                , doDeadCodeElimination = True
                                , doCommonSubexpressionElimination = True
                                , doRegisterAllocation = True
+                               , doInlineFunctions = False
                                }
 
 options3 :: OptimizationOptions
@@ -48,6 +51,7 @@ options3 = OptimizationOptions { doConstantFolding = True
                                , doDeadCodeElimination = True
                                , doCommonSubexpressionElimination = True
                                , doRegisterAllocation = True
+                               , doInlineFunctions = True
                                }
 
 startArgs :: Args
