@@ -26,6 +26,7 @@ data OptimizationOptions = OptimizationOptions { doConstantFolding :: Bool
                                                , doCommonSubexpressionElimination :: Bool
                                                , doRegisterAllocation :: Bool
                                                , doInlineFunctions :: Bool
+                                               , doLayoutOptimizations :: Bool
                                                }
 
 basicOptimize :: OptimizationOptions -> Map VIdent BBGraph -> Map VIdent BBGraph
@@ -38,7 +39,7 @@ basicOptimize options = iterateUntilFixpoint (Map.map opts)
 
 optimize :: OptimizationOptions -> Map VIdent BBGraph -> Map VIdent BBGraph
 optimize options = iterateUntilFixpoint opts
-    where opts = (Map.map layoutOptimization)
+    where opts = (if doLayoutOptimizations options then Map.map layoutOptimization else id)
                . (if doInlineFunctions options then inlineFunctions else id)
                . (Map.mapWithKey unreachableCodeElimination)
                . (Map.map (optimizeBBGraph options))
